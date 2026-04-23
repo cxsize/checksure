@@ -5,12 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-<<<<<<< HEAD
-=======
     "docker:up": "docker compose up",
     "docker:build": "docker compose build",
     "docker:down": "docker compose down",
->>>>>>> f5a1890dcc3c297347a1f7a14f6c4cf4ecd0e81e
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
