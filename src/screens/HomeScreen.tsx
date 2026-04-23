@@ -16,6 +16,7 @@ interface HomeScreenProps {
   lang: Lang;
   status: AppStatus;
   clockInTime: Date | null;
+  breakStartTime: Date | null;
   breakMinutes: number;
   onClockIn: () => void;
   onClockOut: () => void;
@@ -24,14 +25,19 @@ interface HomeScreenProps {
   onTab: (t: TabKey) => void;
 }
 
-export function HomeScreen({ theme, lang, status, clockInTime, breakMinutes, onClockIn, onClockOut, onBreak, tab, onTab }: HomeScreenProps) {
+export function HomeScreen({ theme, lang, status, clockInTime, breakStartTime, breakMinutes, onClockIn, onClockOut, onBreak, tab, onTab }: HomeScreenProps) {
   const now = useNow(60000);
   const site = MOCK_SITES[0];
   const emp = MOCK_EMPLOYEE;
 
+  // Accumulate live break time when currently on break
+  const liveBreakMinutes = status === 'break' && breakStartTime
+    ? breakMinutes + Math.floor((now.getTime() - breakStartTime.getTime()) / 60000)
+    : breakMinutes;
+
   let workedMs = 0;
   if (clockInTime) {
-    workedMs = now.getTime() - clockInTime.getTime() - breakMinutes * 60000;
+    workedMs = now.getTime() - clockInTime.getTime() - liveBreakMinutes * 60000;
   }
   const workedH = Math.max(0, Math.floor(workedMs / 3600000));
   const workedM = Math.max(0, Math.floor((workedMs % 3600000) / 60000));
@@ -82,7 +88,7 @@ export function HomeScreen({ theme, lang, status, clockInTime, breakMinutes, onC
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0, borderTop: `1px solid ${theme.line}`, paddingTop: 18 }}>
                 <Stat theme={theme} label={lang === 'en' ? 'Clock-in' : 'เข้างาน'} value={clockInTime ? fmtTime(clockInTime) : '—'} />
                 <Stat theme={theme} label={COPY.hoursWorked[lang]} value={`${workedH}:${String(workedM).padStart(2, '0')}`} highlight={isOT ? theme.primary : undefined} />
-                <Stat theme={theme} label={lang === 'en' ? 'Break' : 'พัก'} value={`${breakMinutes}`} unit={COPY.minutes[lang]} />
+                <Stat theme={theme} label={lang === 'en' ? 'Break' : 'พัก'} value={`${liveBreakMinutes}`} unit={COPY.minutes[lang]} />
               </div>
             ) : (
               <div style={{ borderTop: `1px solid ${theme.line}`, paddingTop: 18 }}>

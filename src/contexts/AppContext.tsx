@@ -3,7 +3,6 @@ import type { ReactNode } from 'react';
 import type { ThemeKey, Theme, Lang } from '../tokens';
 import { THEMES } from '../tokens';
 
-// Lightweight User type — no Firebase dependency at context level
 interface User { uid: string; displayName: string | null }
 
 export type AppStatus = 'out' | 'in' | 'break';
@@ -11,49 +10,85 @@ export type AppStatus = 'out' | 'in' | 'break';
 export interface ClockState {
   status: AppStatus;
   clockInTime: Date | null;
+  clockOutTime: Date | null;
+  breakStartTime: Date | null;
   breakMinutes: number;
   siteId: string | null;
   lastTime: string | null;
 }
 
 interface AppContextValue {
-  // Auth
   user: User | null;
   authLoading: boolean;
-  // Theme
   themeKey: ThemeKey;
   theme: Theme;
   setThemeKey: (k: ThemeKey) => void;
-  // Language
   lang: Lang;
   setLang: (l: Lang) => void;
   toggleLang: () => void;
-  // Clock state
   clockState: ClockState;
   setClockState: React.Dispatch<React.SetStateAction<ClockState>>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
 
+export const DEFAULT_CLOCK: ClockState = {
+  status: 'out',
+  clockInTime: null,
+  clockOutTime: null,
+  breakStartTime: null,
+  breakMinutes: 0,
+  siteId: null,
+  lastTime: null,
+};
+
+function loadClock(): ClockState {
+  try {
+    const raw = sessionStorage.getItem('clockState');
+    if (!raw) return DEFAULT_CLOCK;
+    const p = JSON.parse(raw);
+    return {
+      ...DEFAULT_CLOCK,
+      ...p,
+      clockInTime:    p.clockInTime    ? new Date(p.clockInTime)    : null,
+      clockOutTime:   p.clockOutTime   ? new Date(p.clockOutTime)   : null,
+      breakStartTime: p.breakStartTime ? new Date(p.breakStartTime) : null,
+    };
+  } catch {
+    return DEFAULT_CLOCK;
+  }
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [user] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [themeKey, setThemeKey] = useState<ThemeKey>('warm');
-  const [lang, setLang] = useState<Lang>('th');
-  const [clockState, setClockState] = useState<ClockState>({
-    status: 'out',
-    clockInTime: null,
-    breakMinutes: 0,
-    siteId: null,
-    lastTime: null,
-  });
+  const [themeKey, _setThemeKey] = useState<ThemeKey>(
+    () => (localStorage.getItem('themeKey') as ThemeKey | null) ?? 'warm',
+  );
+  const [lang, _setLang] = useState<Lang>(
+    () => (localStorage.getItem('lang') as Lang | null) ?? 'th',
+  );
+  const [clockState, setClockState] = useState<ClockState>(loadClock);
+
+  useEffect(() => { setAuthLoading(false); }, []);
 
   useEffect(() => {
-    // Skip Firebase auth watcher in dev when Firebase isn't configured
-    setAuthLoading(false);
-  }, []);
+    try {
+      sessionStorage.setItem('clockState', JSON.stringify(clockState));
+    } catch { /* quota */ }
+  }, [clockState]);
 
-  const toggleLang = () => setLang((l) => (l === 'th' ? 'en' : 'th'));
+  const setThemeKey = (k: ThemeKey) => {
+    localStorage.setItem('themeKey', k);
+    _setThemeKey(k);
+  };
+
+  const setLang = (l: Lang) => {
+    localStorage.setItem('lang', l);
+    _setLang(l);
+  };
+
+  const toggleLang = () => setLang(lang === 'th' ? 'en' : 'th');
 
   return (
     <AppContext.Provider value={{
