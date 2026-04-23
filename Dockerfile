@@ -8,8 +8,39 @@ COPY functions/src ./src
 COPY functions/tsconfig.json ./
 RUN npm run build
 
-# ── Stage 2: Firebase emulators runtime ─────────────────────────────────────
-FROM node:20-slim
+# ── Stage 2: build frontend (production) ─────────────────────────────────────
+FROM node:20-slim AS web-builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY index.html tsconfig*.json vite.config.ts eslint.config.js ./
+COPY src ./src
+COPY public ./public
+
+ARG VITE_FIREBASE_API_KEY \
+    VITE_FIREBASE_AUTH_DOMAIN \
+    VITE_FIREBASE_PROJECT_ID \
+    VITE_FIREBASE_STORAGE_BUCKET \
+    VITE_FIREBASE_MESSAGING_SENDER_ID \
+    VITE_FIREBASE_APP_ID \
+    VITE_LIFF_ID \
+    VITE_API_BASE_URL
+
+RUN npm run build
+
+# ── Stage 3: frontend dev server (hot-reload) ─────────────────────────────────
+FROM node:20-slim AS web-dev
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+
+EXPOSE 5173
+CMD ["npm", "run", "dev", "--", "--host"]
+
+# ── Stage 4: Firebase emulators runtime ─────────────────────────────────────
+FROM node:20-slim AS emulators
 
 # Firestore emulator requires a JRE
 RUN apt-get update \
