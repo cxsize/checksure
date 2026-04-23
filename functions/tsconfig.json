@@ -7,10 +7,17 @@
     "sourceMap": true,
     "strict": true,
     "target": "es2020",
-    "lib": ["es2020"],
+    "lib": [
+      "es2020",
+      "DOM",
+      "DOM.Iterable",
+      "ESNext"
+    ],
     "esModuleInterop": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
   },
   "compileOnSave": true,
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }
