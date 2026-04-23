@@ -1,5 +1,8 @@
+import { useState, useEffect } from 'react';
+import liff from '@line/liff';
 import type { Theme, Lang } from '../tokens';
 import { COPY, FONT_TH, FONT_EN } from '../tokens';
+import { signInWithLineToken } from '../services/firebase';
 import { Icons } from '../components/ui/Icons';
 
 interface LoginScreenProps {
@@ -9,6 +12,66 @@ interface LoginScreenProps {
 }
 
 export function LoginScreen({ theme, lang, onLogin }: LoginScreenProps) {
+  const [liffReady, setLiffReady] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    liff
+      .init({ liffId: import.meta.env.VITE_LIFF_ID ?? '' })
+      .then(() => {
+        setLiffReady(true);
+        // If LIFF already has a session (user returned from LINE auth), proceed immediately
+        if (liff.isLoggedIn()) {
+          handleLineAuth();
+        }
+      })
+      .catch((err) => {
+        // Non-LINE browser or missing LIFF ID — allow dev bypass via button
+        console.warn('[LIFF] init failed:', err);
+        setLiffReady(false);
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleLineAuth() {
+    setLoading(true);
+    setError(null);
+    try {
+      const accessToken = liff.getAccessToken();
+      if (!accessToken) throw new Error('No LINE access token');
+
+      const apiBase = import.meta.env.VITE_API_BASE_URL as string;
+      const res = await fetch(`${apiBase}/lineAuth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken }),
+      });
+
+      const body = (await res.json()) as { customToken?: string; error?: string };
+      if (!res.ok) throw new Error(body.error ?? 'Auth failed');
+
+      await signInWithLineToken(body.customToken!);
+      onLogin();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Login failed');
+      setLoading(false);
+    }
+  }
+
+  function handlePress() {
+    if (!liffReady) {
+      // Dev/browser mode: skip LINE auth entirely
+      onLogin();
+      return;
+    }
+    if (liff.isLoggedIn()) {
+      handleLineAuth();
+    } else {
+      liff.login();
+    }
+  }
+
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '60px 28px 32px', background: theme.bg }}>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: 32 }}>
@@ -52,16 +115,33 @@ export function LoginScreen({ theme, lang, onLogin }: LoginScreenProps) {
         </div>
       </div>
 
+      {error && (
+        <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 12, background: theme.warnSoft, color: theme.warn, fontFamily: FONT_TH, fontSize: 13 }}>
+          {error}
+        </div>
+      )}
+
       {/* LINE login button */}
-      <button onClick={onLogin} style={{
-        width: '100%', minHeight: 64, borderRadius: 18, border: 'none',
-        background: '#06C755', color: '#fff', cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
-        fontFamily: FONT_TH, fontSize: 19, fontWeight: 700,
-        boxShadow: '0 8px 20px -8px rgba(6,199,85,0.6)',
-      }}>
-        <Icons.Line size={24} c="#fff" />
-        {COPY.loginLine[lang]}
+      <button
+        onClick={handlePress}
+        disabled={loading}
+        style={{
+          width: '100%', minHeight: 64, borderRadius: 18, border: 'none',
+          background: loading ? '#04a044' : '#06C755', color: '#fff', cursor: loading ? 'default' : 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12,
+          fontFamily: FONT_TH, fontSize: 19, fontWeight: 700,
+          boxShadow: '0 8px 20px -8px rgba(6,199,85,0.6)',
+          transition: 'background 0.2s',
+        }}
+      >
+        {loading ? (
+          <div style={{ width: 22, height: 22, border: '2.5px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
+        ) : (
+          <Icons.Line size={24} c="#fff" />
+        )}
+        {loading
+          ? (lang === 'en' ? 'Signing in…' : 'กำลังเข้าสู่ระบบ...')
+          : COPY.loginLine[lang]}
       </button>
 
       <div style={{ fontFamily: FONT_TH, fontSize: 13, color: theme.inkSoft, textAlign: 'center', marginTop: 16, lineHeight: 1.5 }}>

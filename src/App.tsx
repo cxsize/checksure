@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from './contexts/AppContext';
 import { fmtTime } from './tokens';
-import { clockIn as fbClockIn, clockOut as fbClockOut } from './services/firebase';
+import {
+  clockIn as fbClockIn,
+  clockOut as fbClockOut,
+  signOut as fbSignOut,
+} from './services/firebase';
 import { LoginScreen } from './screens/LoginScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { ClockInScreen } from './screens/ClockInScreen';
@@ -14,10 +18,17 @@ import type { TabKey } from './components/ui/TabBar';
 type Flow = 'login' | 'app' | 'locating-in' | 'locating-out' | 'success-in' | 'success-out';
 
 export function App() {
-  const { theme, lang, toggleLang, themeKey, setThemeKey, clockState, setClockState, user } = useApp();
+  const { theme, lang, toggleLang, themeKey, setThemeKey, clockState, setClockState, user, authLoading } = useApp();
   const [flow, setFlow] = useState<Flow>('login');
   const [tab, setTab] = useState<TabKey>('home');
   const [lastSiteId, setLastSiteId] = useState<string>('plant-a');
+
+  // Skip login screen if Firebase auth session is already active
+  useEffect(() => {
+    if (!authLoading && user !== null && flow === 'login') {
+      setFlow('app');
+    }
+  }, [user, authLoading, flow]);
 
   const goClockIn  = () => setFlow('locating-in');
   const goClockOut = () => setFlow('locating-out');
@@ -69,7 +80,8 @@ export function App() {
     if (user?.uid) fbClockOut(user.uid).catch(console.error);
   };
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
+    await fbSignOut();
     setFlow('login');
     setClockState({
       status: 'out',
@@ -81,6 +93,15 @@ export function App() {
       lastTime: null,
     });
   };
+
+  // Show nothing while we wait for Firebase to resolve the cached auth session
+  if (authLoading) {
+    return (
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: theme.bg }}>
+        <div style={{ width: 32, height: 32, border: `3px solid ${theme.line}`, borderTopColor: theme.primary, borderRadius: '50%', animation: 'spin 0.9s linear infinite' }} />
+      </div>
+    );
+  }
 
   if (flow === 'login') {
     return <LoginScreen theme={theme} lang={lang} onLogin={() => setFlow('app')} />;
