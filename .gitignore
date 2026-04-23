@@ -26,3 +26,9 @@ dist-ssr
 # Env & secrets
 .env
 .mcp.json
+
+# Firebase emulator data
+emulator-data/
+
+# Cloud Functions compiled output
+functions/lib/
