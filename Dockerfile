@@ -43,9 +43,11 @@ CMD ["npx", "vite", "--host"]
 # ── Stage 4: Firebase emulators runtime ─────────────────────────────────────
 FROM node:20-slim AS emulators
 
-# Firestore emulator requires a JRE
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends openjdk-21-jre-headless \
+# Firestore emulator requires Java 21+ (openjdk-21 is in bookworm-backports, not main)
+RUN echo "deb http://deb.debian.org/debian bookworm-backports main" \
+      > /etc/apt/sources.list.d/backports.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends -t bookworm-backports openjdk-21-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g firebase-tools@15 --prefer-offline
