@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "emulators": "firebase emulators:start --project demo-ezpeople --import ./emulator-data --export-on-exit",
+    "emulators": "docker compose up",
+    "emulators:build": "docker compose build",
+    "emulators:down": "docker compose down",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
