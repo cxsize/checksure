@@ -18,14 +18,7 @@
     "firebase-functions": "^6.0.0"
   },
   "devDependencies": {
-<<<<<<< HEAD
-    "@types/node": "^20.19.39",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "typescript": "^5.9.3"
-=======
     "@types/node": "^20.0.0",
     "typescript": "^5.4.0"
->>>>>>> f5a1890dcc3c297347a1f7a14f6c4cf4ecd0e81e
   }
 }
