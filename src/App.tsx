@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from './contexts/AppContext';
 import { fmtTime } from './tokens';
+import { clockIn as fbClockIn, clockOut as fbClockOut } from './services/firebase';
 import { LoginScreen } from './screens/LoginScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { ClockInScreen } from './screens/ClockInScreen';
@@ -13,7 +14,7 @@ import type { TabKey } from './components/ui/TabBar';
 type Flow = 'login' | 'app' | 'locating-in' | 'locating-out' | 'success-in' | 'success-out';
 
 export function App() {
-  const { theme, lang, toggleLang, themeKey, setThemeKey, clockState, setClockState } = useApp();
+  const { theme, lang, toggleLang, themeKey, setThemeKey, clockState, setClockState, user } = useApp();
   const [flow, setFlow] = useState<Flow>('login');
   const [tab, setTab] = useState<TabKey>('home');
   const [lastSiteId, setLastSiteId] = useState<string>('plant-a');
@@ -22,24 +23,63 @@ export function App() {
   const goClockOut = () => setFlow('locating-out');
 
   const toggleBreak = () =>
-    setClockState((s) => ({ ...s, status: s.status === 'in' ? 'break' : 'in' }));
+    setClockState((s) => {
+      if (s.status === 'in') {
+        return { ...s, status: 'break', breakStartTime: new Date() };
+      }
+      const elapsed = s.breakStartTime
+        ? Math.floor((Date.now() - s.breakStartTime.getTime()) / 60000)
+        : 0;
+      return { ...s, status: 'in', breakMinutes: s.breakMinutes + elapsed, breakStartTime: null };
+    });
 
   const confirmIn = (siteId: string) => {
     const t = new Date();
     setLastSiteId(siteId);
-    setClockState((s) => ({ ...s, status: 'in', clockInTime: t, breakMinutes: 0, siteId, lastTime: fmtTime(t) }));
+    setClockState((s) => ({
+      ...s,
+      status: 'in',
+      clockInTime: t,
+      clockOutTime: null,
+      breakMinutes: 0,
+      breakStartTime: null,
+      siteId,
+      lastTime: fmtTime(t),
+    }));
     setFlow('success-in');
+    if (user?.uid) fbClockIn(user.uid, siteId).catch(console.error);
   };
 
   const confirmOut = (_siteId: string) => {
     const t = new Date();
-    setClockState((s) => ({ ...s, status: 'out', lastTime: fmtTime(t) }));
+    setClockState((s) => {
+      const breakElapsed = s.status === 'break' && s.breakStartTime
+        ? Math.floor((t.getTime() - s.breakStartTime.getTime()) / 60000)
+        : 0;
+      return {
+        ...s,
+        status: 'out',
+        clockOutTime: t,
+        lastTime: fmtTime(t),
+        breakMinutes: s.breakMinutes + breakElapsed,
+        breakStartTime: null,
+      };
+    });
     setFlow('success-out');
+    if (user?.uid) fbClockOut(user.uid).catch(console.error);
   };
 
   const handleSignOut = () => {
     setFlow('login');
-    setClockState({ status: 'out', clockInTime: null, breakMinutes: 0, siteId: null, lastTime: null });
+    setClockState({
+      status: 'out',
+      clockInTime: null,
+      clockOutTime: null,
+      breakStartTime: null,
+      breakMinutes: 0,
+      siteId: null,
+      lastTime: null,
+    });
   };
 
   if (flow === 'login') {
@@ -65,6 +105,7 @@ export function App() {
           theme={theme} lang={lang}
           status={clockState.status}
           clockInTime={clockState.clockInTime}
+          breakStartTime={clockState.breakStartTime}
           breakMinutes={clockState.breakMinutes}
           onClockIn={goClockIn} onClockOut={goClockOut} onBreak={toggleBreak}
           tab={tab} onTab={setTab}
