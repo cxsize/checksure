@@ -58,6 +58,9 @@ A mobile-first employee check-in app built with React, Firebase, and LINE LIFF. 
 │       ├── services/
 │       │   └── line.ts   # LINE API client
 │       └── types.ts      # Shared TypeScript interfaces
+├── .github/
+│   └── workflows/
+│       └── deploy.yml    # CI/CD — auto-deploy to Firebase on push to main
 ├── Dockerfile            # Multi-stage: functions-builder, web-builder, web-dev, emulators
 ├── docker-compose.yml    # firebase (emulators) + web (Vite dev server)
 ├── firebase.json         # Emulator ports, Firestore rules/indexes, hosting config
@@ -114,64 +117,73 @@ Emulator data (users, attendance records) is persisted in a named Docker volume 
 
 ## Production Setup
 
+Deployments are automated via GitHub Actions. Every push to `main` builds and deploys the full stack to Firebase.
+
 ### 1. Firebase project
 
 Create a project at [console.firebase.google.com](https://console.firebase.google.com) and enable:
-- Authentication → Sign-in method → Custom
-- Firestore Database
-- Cloud Functions (Blaze plan required)
+- **Authentication** → Sign-in method → Custom
+- **Firestore Database** (production mode)
+- **Cloud Functions** (requires Blaze pay-as-you-go plan)
+- **Hosting**
 
 ### 2. LINE LIFF app
 
 In [LINE Developers Console](https://developers.line.biz):
 1. Create a provider and a channel (LINE Login)
-2. Add a LIFF app with endpoint URL pointing to your hosting domain
+2. Add a LIFF app — set the endpoint URL to your Firebase Hosting domain (e.g. `https://your-project.web.app`)
 3. Copy the LIFF ID
 
-### 3. Environment variables
+### 3. Get a Firebase CI token
 
-Copy `.env.example` to `.env` and fill in the values:
+Run this once on your local machine:
 
 ```bash
-cp .env.example .env
+npx firebase-tools login:ci
 ```
 
-```env
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=your-project-id
-VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
+Copy the token it prints — you'll need it in the next step.
 
-VITE_LIFF_ID=your-liff-id
+### 4. Add GitHub Secrets
 
-# Production Functions URL
-VITE_API_BASE_URL=https://asia-southeast1-your-project-id.cloudfunctions.net
-```
+Go to **GitHub → repo → Settings → Secrets and variables → Actions** and add:
 
-### 4. Update `.firebaserc`
-
-```json
-{
-  "projects": {
-    "default": "your-firebase-project-id"
-  }
-}
-```
+| Secret | Value |
+|---|---|
+| `FIREBASE_PROJECT_ID` | your Firebase project ID |
+| `FIREBASE_TOKEN` | token from `firebase login:ci` |
+| `VITE_FIREBASE_API_KEY` | from Firebase console → Project settings |
+| `VITE_FIREBASE_AUTH_DOMAIN` | `your-project.firebaseapp.com` |
+| `VITE_FIREBASE_PROJECT_ID` | same as `FIREBASE_PROJECT_ID` |
+| `VITE_FIREBASE_STORAGE_BUCKET` | `your-project.appspot.com` |
+| `VITE_FIREBASE_MESSAGING_SENDER_ID` | from Firebase console |
+| `VITE_FIREBASE_APP_ID` | from Firebase console |
+| `VITE_LIFF_ID` | from LINE Developers Console |
+| `VITE_API_BASE_URL` | `https://asia-southeast1-your-project-id.cloudfunctions.net` |
 
 ### 5. Deploy
 
+Push to `main` — the workflow in `.github/workflows/deploy.yml` does the rest:
+
+1. Builds the frontend (Vite) with production env vars baked in
+2. Compiles TypeScript Cloud Functions
+3. Deploys Firestore rules + indexes, Cloud Functions, and Hosting in one `firebase deploy`
+
+```
+git push origin main   # triggers auto-deploy
+```
+
+### Manual deploy (without CI)
+
 ```bash
-# Deploy Firestore rules + indexes
-firebase deploy --only firestore
+cp .env.example .env   # fill in production values
 
-# Deploy Cloud Functions
-firebase deploy --only functions
+npm run build          # builds dist/
+npm run build --prefix functions   # builds functions/lib/
 
-# Build and deploy frontend
-npm run build
-firebase deploy --only hosting
+npx firebase-tools deploy \
+  --project your-project-id \
+  --only hosting,functions,firestore
 ```
 
 ## Firestore Data Model
