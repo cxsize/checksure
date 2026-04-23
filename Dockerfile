@@ -37,7 +37,8 @@ COPY package*.json ./
 RUN npm ci
 
 EXPOSE 5173
-CMD ["npm", "run", "dev", "--", "--host"]
+# Use npx vite directly — avoids npm argument-passing quirks with --host
+CMD ["npx", "vite", "--host"]
 
 # ── Stage 4: Firebase emulators runtime ─────────────────────────────────────
 FROM node:20-slim AS emulators
@@ -48,6 +49,9 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g firebase-tools@15 --prefer-offline
+
+# Pre-download Firestore emulator JAR so first container start doesn't stall
+RUN firebase setup:emulators:firestore
 
 WORKDIR /app
 

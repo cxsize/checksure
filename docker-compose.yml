@@ -11,6 +11,7 @@ services:
     volumes:
       - emulator-data:/data
     restart: unless-stopped
+    stop_grace_period: 30s  # give Firebase time to export data on shutdown
 
   web:
     build:
