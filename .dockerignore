@@ -1,0 +1,10 @@
+node_modules
+functions/node_modules
+functions/lib
+dist
+dist-ssr
+emulator-data
+.git
+.env
+.mcp.json
+*.log

@@ -1,8 +1,20 @@
 import { initializeApp } from 'firebase/app';
+<<<<<<< HEAD
 import { getAuth, signInWithCustomToken, signOut as fbSignOut, onAuthStateChanged } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import {
   getFirestore,
+=======
+import {
+  getAuth, signInWithCustomToken,
+  signOut as fbSignOut, onAuthStateChanged,
+  connectAuthEmulator,
+} from 'firebase/auth';
+import type { User } from 'firebase/auth';
+import {
+  getFirestore,
+  connectFirestoreEmulator,
+>>>>>>> f5a1890dcc3c297347a1f7a14f6c4cf4ecd0e81e
   doc,
   getDoc,
   setDoc,
@@ -29,6 +41,15 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
+<<<<<<< HEAD
+=======
+// Connect to local emulators in development
+if (import.meta.env.DEV) {
+  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, 'localhost', 8080);
+}
+
+>>>>>>> f5a1890dcc3c297347a1f7a14f6c4cf4ecd0e81e
 // ─── Auth ───────────────────────────────────────────────────────────────────
 
 export function onAuthChange(cb: (user: User | null) => void) {

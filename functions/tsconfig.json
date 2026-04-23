@@ -7,6 +7,7 @@
     "sourceMap": true,
     "strict": true,
     "target": "es2020",
+<<<<<<< HEAD
     "lib": [
       "es2020",
       "DOM",
@@ -21,3 +22,13 @@
     "src"
   ]
 }
+=======
+    "lib": ["es2020"],
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true
+  },
+  "compileOnSave": true,
+  "include": ["src"]
+}
+>>>>>>> f5a1890dcc3c297347a1f7a14f6c4cf4ecd0e81e
