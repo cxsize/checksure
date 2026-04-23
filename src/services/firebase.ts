@@ -1,8 +1,13 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithCustomToken, signOut as fbSignOut, onAuthStateChanged } from 'firebase/auth';
+import {
+  getAuth, signInWithCustomToken,
+  signOut as fbSignOut, onAuthStateChanged,
+  connectAuthEmulator,
+} from 'firebase/auth';
 import type { User } from 'firebase/auth';
 import {
   getFirestore,
+  connectFirestoreEmulator,
   doc,
   getDoc,
   setDoc,
@@ -28,6 +33,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Connect to local emulators in development
+if (import.meta.env.DEV) {
+  connectAuthEmulator(auth, 'http://localhost:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, 'localhost', 8080);
+}
 
 // ─── Auth ───────────────────────────────────────────────────────────────────
 

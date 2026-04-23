@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import liff from '@line/liff';
 import type { Theme, Lang } from '../tokens';
 import { COPY, FONT_TH, FONT_EN } from '../tokens';
-import { signInWithLineToken } from '../services/firebase';
+import { signInWithLineToken, auth } from '../services/firebase';
+import { signInAnonymously } from 'firebase/auth';
 import { Icons } from '../components/ui/Icons';
 
 interface LoginScreenProps {
@@ -61,8 +62,11 @@ export function LoginScreen({ theme, lang, onLogin }: LoginScreenProps) {
 
   function handlePress() {
     if (!liffReady) {
-      // Dev/browser mode: skip LINE auth entirely
-      onLogin();
+      // Dev mode: sign in anonymously against the local Auth emulator
+      setLoading(true);
+      signInAnonymously(auth)
+        .then(() => onLogin())
+        .catch((err: Error) => { setError(err.message); setLoading(false); });
       return;
     }
     if (liff.isLoggedIn()) {
