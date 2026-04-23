@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { ThemeKey, Theme, Lang } from '../tokens';
 import { THEMES } from '../tokens';
+import { onAuthChange } from '../services/firebase';
 
 interface User { uid: string; displayName: string | null }
 
@@ -46,7 +47,7 @@ function loadClock(): ClockState {
   try {
     const raw = sessionStorage.getItem('clockState');
     if (!raw) return DEFAULT_CLOCK;
-    const p = JSON.parse(raw);
+    const p = JSON.parse(raw) as Partial<ClockState & { clockInTime: string; clockOutTime: string; breakStartTime: string }>;
     return {
       ...DEFAULT_CLOCK,
       ...p,
@@ -60,7 +61,7 @@ function loadClock(): ClockState {
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const [user] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [themeKey, _setThemeKey] = useState<ThemeKey>(
     () => (localStorage.getItem('themeKey') as ThemeKey | null) ?? 'warm',
@@ -70,7 +71,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const [clockState, setClockState] = useState<ClockState>(loadClock);
 
-  useEffect(() => { setAuthLoading(false); }, []);
+  // Firebase auth state listener — fires once on mount with cached session
+  useEffect(() => {
+    const unsubscribe = onAuthChange((fbUser) => {
+      setUser(fbUser ? { uid: fbUser.uid, displayName: fbUser.displayName } : null);
+      setAuthLoading(false);
+    });
+    return unsubscribe;
+  }, []);
 
   useEffect(() => {
     try {
