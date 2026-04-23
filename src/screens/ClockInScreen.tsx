@@ -23,10 +23,15 @@ export function ClockInScreen({ theme, lang, mode, onConfirm, onCancel }: ClockI
 
   useEffect(() => {
     geo.locate();
-    // Fallback: show ready state after 2s even without real GPS (demo UX)
+    // Fallback: show ready state after 2s when GPS succeeds or times out
     const t = setTimeout(() => setPhase('ready'), 2000);
     return () => clearTimeout(t);
   }, []);
+
+  // If geo error occurs, still transition to ready so user sees the outside-area warning
+  useEffect(() => {
+    if (geo.error) setPhase('ready');
+  }, [geo.error]);
 
   useEffect(() => {
     if (geo.lat !== null && geo.lng !== null) {
@@ -137,8 +142,21 @@ export function ClockInScreen({ theme, lang, mode, onConfirm, onCancel }: ClockI
         </div>
       </div>
 
+      {/* GPS permission denied */}
+      {geo.error && (
+        <div style={{ margin: '12px 20px 0', background: theme.warnSoft, color: theme.warn, borderRadius: 14, padding: '12px 14px', fontFamily: FONT_TH, fontSize: 13, lineHeight: 1.5, display: 'flex', gap: 10 }}>
+          <Icons.Pin size={18} c={theme.warn} />
+          <div>
+            <b>{lang === 'en' ? 'Location access denied.' : 'ไม่สามารถเข้าถึงตำแหน่งได้'}</b><br />
+            {lang === 'en'
+              ? 'Enable location in your browser settings, then reload.'
+              : 'กรุณาเปิดสิทธิ์ตำแหน่งในเบราว์เซอร์แล้วโหลดหน้าใหม่'}
+          </div>
+        </div>
+      )}
+
       {/* Outside warning */}
-      {phase === 'ready' && !site.inside && (
+      {phase === 'ready' && !geo.error && !site.inside && (
         <div style={{ margin: '12px 20px 0', background: theme.warnSoft, color: theme.warn, borderRadius: 14, padding: '12px 14px', fontFamily: FONT_TH, fontSize: 13, lineHeight: 1.5, display: 'flex', gap: 10 }}>
           <Icons.Pin size={18} c={theme.warn} />
           <div>
