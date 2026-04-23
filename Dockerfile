@@ -45,7 +45,7 @@ FROM node:20-slim AS emulators
 
 # Firestore emulator requires a JRE
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends default-jre-headless \
+    && apt-get install -y --no-install-recommends openjdk-21-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
 RUN npm install -g firebase-tools@15 --prefer-offline
