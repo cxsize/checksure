@@ -37,18 +37,20 @@ COPY package*.json ./
 RUN npm ci
 
 EXPOSE 5173
-# Use npx vite directly — avoids npm argument-passing quirks with --host
 CMD ["npx", "vite", "--host"]
 
-# ── Stage 4: Firebase emulators runtime ─────────────────────────────────────
+# ── Stage 4: Java 21 provider ─────────────────────────────────────────────────
+# Debian Bookworm (node:20-slim base) does not ship Java 21 in its main or
+# backports repos at build time. Copy the JRE straight from the official
+# Eclipse Temurin image — no apt repository setup required.
+FROM eclipse-temurin:21-jre AS java
+
+# ── Stage 5: Firebase emulators runtime ─────────────────────────────────────
 FROM node:20-slim AS emulators
 
-# Firestore emulator requires Java 21+ (openjdk-21 is in bookworm-backports, not main)
-RUN echo "deb http://deb.debian.org/debian bookworm-backports main" \
-      > /etc/apt/sources.list.d/backports.list \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends -t bookworm-backports openjdk-21-jre-headless \
-    && rm -rf /var/lib/apt/lists/*
+COPY --from=java /opt/java/openjdk /opt/java/openjdk
+ENV JAVA_HOME=/opt/java/openjdk
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 RUN npm install -g firebase-tools@15 --prefer-offline
 
