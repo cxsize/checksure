@@ -9,7 +9,7 @@ import { db } from '../firestore';
 export const onAttendanceUpdate = onDocumentUpdated(
   {
     document: 'attendance/{uid}/records/{date}',
-    database: 'db-checksure',
+    database: process.env.FIRESTORE_DB || '(default)',
     region: 'asia-southeast1',
   },
   async (event) => {

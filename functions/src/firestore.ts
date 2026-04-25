@@ -1,3 +1,4 @@
 import { getFirestore } from 'firebase-admin/firestore';
 
-export const db = () => getFirestore('db-checksure');
+const FIRESTORE_DB = process.env.FIRESTORE_DB || '(default)';
+export const db = () => getFirestore(FIRESTORE_DB);

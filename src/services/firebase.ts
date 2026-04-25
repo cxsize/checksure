@@ -34,7 +34,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app, 'db-checksure');
+const firestoreDb = import.meta.env.VITE_FIRESTORE_DB || '(default)';
+export const db = getFirestore(app, firestoreDb);
 
 // Connect to local emulators in development
 if (import.meta.env.DEV) {
