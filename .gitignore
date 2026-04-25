@@ -33,3 +33,4 @@ emulator-data/
 
 # Cloud Functions compiled output
 functions/lib/
+.github/workflows/
