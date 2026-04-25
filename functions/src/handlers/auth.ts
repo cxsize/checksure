@@ -1,6 +1,7 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { db } from '../firestore';
 import { getLineProfile } from '../services/line';
 
 // Allowed origins for CORS — production + LIFF + local dev
@@ -71,7 +72,7 @@ export const lineAuth = onRequest(
 
       // Upsert user document — only fields that come from LINE; app preferences
       // are set by the client via upsertUserProfile()
-      await getFirestore()
+      await db()
         .collection('users')
         .doc(uid)
         .set(

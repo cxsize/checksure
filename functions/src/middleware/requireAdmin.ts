@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { db } from '../firestore';
 
 export interface AdminRequest extends Request {
   adminUser?: { uid: string; email?: string; role: string };
@@ -22,7 +22,7 @@ export async function requireAdmin(
   try {
     const decoded = await getAuth().verifyIdToken(idToken);
 
-    const userDoc = await getFirestore().collection('users').doc(decoded.uid).get();
+    const userDoc = await db().collection('users').doc(decoded.uid).get();
     if (!userDoc.exists || userDoc.data()?.role !== 'admin') {
       res.status(403).json({ error: 'Admin access required' });
       return;

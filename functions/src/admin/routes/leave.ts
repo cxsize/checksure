@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { db } from '../../firestore';
 
 export const leaveRouter = Router();
-const db = () => getFirestore();
 
 // GET /admin/leave?uid=&status=&limit=&startAfter=
 // If uid is omitted, returns leave requests across all users

@@ -1,8 +1,6 @@
 import { onSchedule } from 'firebase-functions/v2/scheduler';
-import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
-
-const db = getFirestore();
+import { db } from '../firestore';
 const messaging = getMessaging();
 
 /**
@@ -19,7 +17,7 @@ export const clockInReminder = onSchedule(
     const today = formatDate(new Date());
 
     // Get all active users with notificationsEnabled
-    const usersSnap = await db
+    const usersSnap = await db()
       .collection('users')
       .where('active', '!=', false)
       .where('notificationsEnabled', '==', true)
@@ -40,7 +38,7 @@ export const clockInReminder = onSchedule(
 
 async function checkAndNotify(uid: string, userData: FirebaseFirestore.DocumentData, today: string) {
   // Check if user already has a clock-in record for today
-  const recordsSnap = await db
+  const recordsSnap = await db()
     .collection('attendance')
     .doc(uid)
     .collection('records')
@@ -51,7 +49,7 @@ async function checkAndNotify(uid: string, userData: FirebaseFirestore.DocumentD
   if (!recordsSnap.empty) return; // Already clocked in
 
   // Get user's FCM tokens
-  const tokensSnap = await db.collection('users').doc(uid).collection('fcmTokens').get();
+  const tokensSnap = await db().collection('users').doc(uid).collection('fcmTokens').get();
   if (tokensSnap.empty) return;
 
   const tokens = tokensSnap.docs.map((d) => d.data().token as string);
@@ -84,9 +82,9 @@ async function checkAndNotify(uid: string, userData: FirebaseFirestore.DocumentD
   });
 
   if (invalidTokens.length > 0) {
-    const batch = db.batch();
+    const batch = db().batch();
     for (const token of invalidTokens) {
-      batch.delete(db.collection('users').doc(uid).collection('fcmTokens').doc(token));
+      batch.delete(db().collection('users').doc(uid).collection('fcmTokens').doc(token));
     }
     await batch.commit();
   }

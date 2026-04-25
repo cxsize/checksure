@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { db } from '../../firestore';
 
 export const usersRouter = Router();
-const db = () => getFirestore();
 
 // GET /admin/users?role=&limit=&startAfter=
 usersRouter.get('/', async (req, res) => {

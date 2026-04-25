@@ -1,8 +1,7 @@
 import { Router } from 'express';
-import { getFirestore } from 'firebase-admin/firestore';
+import { db } from '../../firestore';
 
 export const attendanceRouter = Router();
-const db = () => getFirestore();
 
 // GET /admin/attendance?uid=&startDate=&endDate=&limit=&startAfter=
 attendanceRouter.get('/', async (req, res) => {

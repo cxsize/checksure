@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
+import { db } from '../../firestore';
 
 export const sitesRouter = Router();
-const db = () => getFirestore();
 
 // GET /admin/sites?active=true
 sitesRouter.get('/', async (req, res) => {

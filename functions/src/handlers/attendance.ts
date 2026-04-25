@@ -1,5 +1,6 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
+import { db } from '../firestore';
 
 /**
  * When an attendance record is updated with a clockOut timestamp,
@@ -8,6 +9,7 @@ import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 export const onAttendanceUpdate = onDocumentUpdated(
   {
     document: 'attendance/{uid}/records/{date}',
+    database: 'db-checksure',
     region: 'asia-southeast1',
   },
   async (event) => {
@@ -29,7 +31,7 @@ export const onAttendanceUpdate = onDocumentUpdated(
     const workedMinutes = Math.max(0, Math.floor(workedMs / 60000));
     const otMinutes = Math.max(0, workedMinutes - 480); // 8h = 480min
 
-    await getFirestore()
+    await db()
       .doc(event.data!.after.ref.path)
       .update({ workedMinutes, otMinutes });
   },

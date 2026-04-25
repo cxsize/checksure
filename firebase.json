@@ -1,5 +1,6 @@
 {
   "firestore": {
+    "database": "db-checksure",
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },

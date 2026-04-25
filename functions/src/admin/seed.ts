@@ -17,7 +17,7 @@ initializeApp(
     : { credential: applicationDefault() },
 );
 
-const db = getFirestore();
+const db = getFirestore('db-checksure');
 
 const SITES = [
   {
