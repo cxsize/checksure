@@ -43,8 +43,11 @@ export function LoginScreen({ theme, lang, onLogin }: LoginScreenProps) {
       const accessToken = liff.getAccessToken();
       if (!accessToken) throw new Error('No LINE access token');
 
-      const apiBase = import.meta.env.VITE_API_BASE_URL as string;
-      const res = await fetch(`${apiBase}/lineAuth`, {
+      const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || '';
+      const lineAuthUrl = import.meta.env.DEV
+        ? `http://localhost:5001/${projectId}/asia-southeast1/lineAuth`
+        : (import.meta.env.VITE_LINE_AUTH_URL || `https://lineauth-6ocfcfmu4a-as.a.run.app`);
+      const res = await fetch(lineAuthUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken }),
@@ -66,8 +69,9 @@ export function LoginScreen({ theme, lang, onLogin }: LoginScreenProps) {
     setError(null);
     try {
       // Dev mode: call lineAuth with a fake token — the emulator accepts anything
-      const apiBase = import.meta.env.VITE_API_BASE_URL as string;
-      const res = await fetch(`${apiBase}/lineAuth`, {
+      const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || '';
+      const lineAuthUrl = `http://localhost:5001/${projectId}/asia-southeast1/lineAuth`;
+      const res = await fetch(lineAuthUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken: 'dev-test-token' }),
@@ -77,17 +81,32 @@ export function LoginScreen({ theme, lang, onLogin }: LoginScreenProps) {
       await signInWithLineToken(body.customToken!);
       onLogin();
     } catch (err) {
-      // Fallback to anonymous if lineAuth isn't running
+      // Fallback to anonymous if lineAuth isn't running (dev only)
       console.warn('[Dev] lineAuth failed, falling back to anonymous:', err);
-      signInAnonymously(auth)
-        .then(() => onLogin())
-        .catch((e: Error) => { setError(e.message); setLoading(false); });
+      if (import.meta.env.DEV) {
+        signInAnonymously(auth)
+          .then(() => onLogin())
+          .catch((e: Error) => { setError(e.message); setLoading(false); });
+      } else {
+        setError(lang === 'en' ? 'Login failed. Please try again.' : 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่');
+        setLoading(false);
+      }
     }
   }
 
   function handlePress() {
     if (!liffReady) {
-      handleDevLogin();
+      if (import.meta.env.DEV) {
+        handleDevLogin();
+      } else {
+        // Production: redirect to LIFF URL so it opens in LINE
+        const liffId = import.meta.env.VITE_LIFF_ID;
+        if (liffId) {
+          window.location.href = `https://liff.line.me/${liffId}`;
+        } else {
+          setError(lang === 'en' ? 'Please open this app in LINE.' : 'กรุณาเปิดแอปนี้ผ่าน LINE');
+        }
+      }
       return;
     }
     if (liff.isLoggedIn()) {

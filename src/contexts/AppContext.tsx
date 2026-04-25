@@ -6,7 +6,7 @@ import { onAuthChange, getTodayShifts, getUserProfile, upsertUserProfile } from 
 import type { AttendanceRecord, UserProfile } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
 
-interface User { uid: string; displayName: string | null }
+interface User { uid: string; displayName: string | null; isAnonymous: boolean }
 
 export type AppStatus = 'out' | 'in';
 
@@ -107,9 +107,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Firebase auth state listener — fires once on mount with cached session
   useEffect(() => {
-    const unsubscribe = onAuthChange((fbUser) => {
+    const unsubscribe = onAuthChange(async (fbUser) => {
+      // In production, sign out stale anonymous sessions so LINE login can take over
+      if (fbUser && fbUser.isAnonymous && !import.meta.env.DEV) {
+        await fbUser.delete().catch(() => {});
+        setUser(null);
+        setAuthLoading(false);
+        return;
+      }
       if (fbUser) {
-        setUser({ uid: fbUser.uid, displayName: fbUser.displayName });
+        setUser({ uid: fbUser.uid, displayName: fbUser.displayName, isAnonymous: fbUser.isAnonymous });
         hydrateUserData(fbUser.uid);
       } else {
         setUser(null);

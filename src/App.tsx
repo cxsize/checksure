@@ -50,8 +50,9 @@ export function App() {
     return () => { fcmUnsubRef.current?.(); fcmUnsubRef.current = null; };
   }, [user, profile?.notificationsEnabled]);
 
-  // Derive effective flow: auto-redirect to app if authenticated
-  const effectiveFlow = (!authLoading && user !== null && flow === 'login') ? 'app' : flow;
+  // Derive effective flow: auto-redirect to app if authenticated (skip anonymous users in production)
+  const isRealUser = user !== null && (!user.isAnonymous || import.meta.env.DEV);
+  const effectiveFlow = (!authLoading && isRealUser && flow === 'login') ? 'app' : flow;
 
   const goClockIn  = () => setFlow('locating-in');
   const goClockOut = () => setFlow('locating-out');

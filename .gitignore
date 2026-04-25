@@ -25,6 +25,7 @@ dist-ssr
 
 # Env & secrets
 .env
+.env.production
 .mcp.json
 
 # Firebase emulator data
