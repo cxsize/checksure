@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Theme, Lang } from '../tokens';
-import { COPY, FONT_TH, FONT_EN, FONT_NUM, fmtTime } from '../tokens';
+import { COPY, FONT_TH, FONT_EN, FONT_NUM, MONTH_TH, MONTH_EN, DOW_TH, DOW_EN, fmtTime } from '../tokens';
 import { useApp } from '../contexts/AppContext';
 import { useNow } from '../hooks/useNow';
+import { getWeekRecords } from '../services/firebase';
+import type { AttendanceRecord } from '../services/firebase';
+import { Timestamp } from 'firebase/firestore';
 import type { TabKey } from '../components/ui/TabBar';
 import { TabBar } from '../components/ui/TabBar';
 import { Icons } from '../components/ui/Icons';
@@ -14,13 +17,17 @@ interface HistoryScreenProps {
   onTab: (t: TabKey) => void;
 }
 
-const MONTH_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
-const MONTH_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const DOW_TH   = ['อา','จ','อ','พ','พฤ','ศ','ส'];
-const DOW_EN   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+interface ShiftEntry {
+  shift: number;
+  clockIn: string | null;
+  clockOut: string | null;
+  workedH: string;
+}
 
 interface DayEntry {
   date: Date;
+  dateKey: string;
   d: string;
   monthTh: string;
   monthEn: string;
@@ -28,34 +35,26 @@ interface DayEntry {
   dowEn: string;
   isToday: boolean;
   isFuture: boolean;
-  isWeekend: boolean;
   clockIn: string | null;
   clockOut: string | null;
   workedH: string;
   otH: number;
   live: boolean;
+  shifts: number;
+  shiftDetails: ShiftEntry[];
 }
 
-// Deterministic mock data for past working days (hash from date)
-function mockClockData(date: Date): { clockIn: string; clockOut: string; workedH: string; otH: number } {
-  const seed = date.getDate() * 13 + date.getMonth() * 7;
-  const inH = 7 + (seed % 2);       // 07 or 08
-  const inM = (seed * 11) % 45;
-  const outH = 16 + (seed % 4);     // 16–19
-  const outM = (seed * 7 + 5) % 55;
-  const workedMins = (outH - inH) * 60 + (outM - inM);
-  const otMins = Math.max(0, workedMins - 480);
-  const h = Math.floor(workedMins / 60);
-  const m = workedMins % 60;
-  return {
-    clockIn:  `${String(inH).padStart(2,'0')}:${String(inM).padStart(2,'0')}`,
-    clockOut: `${String(outH).padStart(2,'0')}:${String(outM).padStart(2,'0')}`,
-    workedH:  `${h}:${String(m).padStart(2,'0')}`,
-    otH: otMins / 60,
-  };
+function toDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function buildWeek(weekOffset: number, now: Date, clockState: ReturnType<typeof useApp>['clockState']): DayEntry[] {
+function fmtTimestamp(ts: Timestamp | null): string | null {
+  if (!(ts instanceof Timestamp)) return null;
+  const d = ts.toDate();
+  return fmtTime(d);
+}
+
+function buildWeek(weekOffset: number, now: Date, clockState: ReturnType<typeof useApp>['clockState'], records: Map<string, AttendanceRecord[]>): DayEntry[] {
   const today = new Date(now);
   today.setHours(0, 0, 0, 0);
 
@@ -73,49 +72,111 @@ function buildWeek(weekOffset: number, now: Date, clockState: ReturnType<typeof 
 
     const isToday   = d.getTime() === today.getTime();
     const isFuture  = d.getTime() > today.getTime();
-    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-
     let clockIn: string | null = null;
     let clockOut: string | null = null;
     let workedH = '—';
     let otH = 0;
     let live = false;
+    let shifts = 0;
+    let shiftDetails: ShiftEntry[] = [];
+    const dateKey = toDateKey(d);
 
     if (isToday) {
-      if (clockState.clockInTime) {
+      // For today, also check Firestore records for completed earlier shifts
+      const todayRecords = records.get(dateKey);
+      if (todayRecords && todayRecords.length > 0) {
+        shifts = todayRecords.length;
+        // If the user is currently clocked in, that's tracked in clockState
+        if (clockState.status === 'in') shifts = Math.max(shifts, clockState.shift);
+        clockIn = fmtTimestamp(todayRecords[0].clockIn);
+        // Build shift details from records
+        shiftDetails = todayRecords.slice(-3).map((rec) => {
+          const wMins = rec.workedMinutes ?? 0;
+          const hh = Math.floor(wMins / 60);
+          const mm = wMins % 60;
+          return {
+            shift: rec.shift,
+            clockIn: fmtTimestamp(rec.clockIn),
+            clockOut: fmtTimestamp(rec.clockOut),
+            workedH: rec.clockOut ? `${hh}:${String(mm).padStart(2, '0')}` : '—',
+          };
+        });
+        // Sum worked time from all Firestore records
+        const totalWorked = todayRecords.reduce((sum, s) => sum + (s.workedMinutes ?? 0), 0);
+        const totalOt = todayRecords.reduce((sum, s) => sum + (s.otMinutes ?? 0), 0);
+        // If currently clocked in, add live time
+        if (clockState.status === 'in' && clockState.clockInTime) {
+          live = true;
+          const liveMs = now.getTime() - clockState.clockInTime.getTime();
+          const liveMins = Math.max(0, Math.floor(liveMs / 60000));
+          const combined = totalWorked + liveMins;
+          const h = Math.floor(combined / 60);
+          const m = combined % 60;
+          workedH = `${h}:${String(m).padStart(2, '0')}`;
+          otH = Math.max(0, combined - 480) / 60;
+          clockOut = null;
+        } else if (clockState.status === 'out' && clockState.clockOutTime) {
+          clockOut = fmtTime(clockState.clockOutTime);
+          const h = Math.floor(totalWorked / 60);
+          const m = totalWorked % 60;
+          workedH = `${h}:${String(m).padStart(2, '0')}`;
+          otH = totalOt / 60;
+        }
+      } else if (clockState.clockInTime) {
+        // No Firestore records yet, but user has clocked in this session
         clockIn = fmtTime(clockState.clockInTime);
+        shifts = clockState.shift;
         if (clockState.status === 'out' && clockState.clockOutTime) {
           clockOut = fmtTime(clockState.clockOutTime);
-          const workedMs = clockState.clockOutTime.getTime() - clockState.clockInTime.getTime() - clockState.breakMinutes * 60000;
+          const workedMs = clockState.clockOutTime.getTime() - clockState.clockInTime.getTime();
           const wMins = Math.max(0, Math.floor(workedMs / 60000));
           const h = Math.floor(wMins / 60);
           const m = wMins % 60;
-          workedH = `${h}:${String(m).padStart(2,'0')}`;
+          workedH = `${h}:${String(m).padStart(2, '0')}`;
           otH = Math.max(0, wMins - 480) / 60;
         } else {
           live = true;
-          // Compute elapsed since clockIn
-          const workedMs = now.getTime() - clockState.clockInTime.getTime() - clockState.breakMinutes * 60000;
+          const workedMs = now.getTime() - clockState.clockInTime.getTime();
           const wMins = Math.max(0, Math.floor(workedMs / 60000));
           const h = Math.floor(wMins / 60);
           const m = wMins % 60;
-          workedH = `${h}:${String(m).padStart(2,'0')}`;
+          workedH = `${h}:${String(m).padStart(2, '0')}`;
           otH = Math.max(0, wMins - 480) / 60;
         }
       }
-    } else if (!isFuture && !isWeekend) {
-      const mock = mockClockData(d);
-      clockIn  = mock.clockIn;
-      clockOut = mock.clockOut;
-      workedH  = mock.workedH;
-      otH      = mock.otH;
+    } else if (!isFuture) {
+      const dayShifts = records.get(dateKey);
+      if (dayShifts && dayShifts.length > 0) {
+        shifts = dayShifts.length;
+        clockIn = fmtTimestamp(dayShifts[0].clockIn);
+        const lastShift = dayShifts[dayShifts.length - 1];
+        clockOut = fmtTimestamp(lastShift.clockOut);
+        const totalWorked = dayShifts.reduce((sum, s) => sum + (s.workedMinutes ?? 0), 0);
+        const totalOt = dayShifts.reduce((sum, s) => sum + (s.otMinutes ?? 0), 0);
+        const h = Math.floor(totalWorked / 60);
+        const m = totalWorked % 60;
+        workedH = `${h}:${String(m).padStart(2, '0')}`;
+        otH = totalOt / 60;
+        // Last 3 shifts for detail view
+        shiftDetails = dayShifts.slice(-3).map((rec) => {
+          const wMins = rec.workedMinutes ?? 0;
+          const hh = Math.floor(wMins / 60);
+          const mm = wMins % 60;
+          return {
+            shift: rec.shift,
+            clockIn: fmtTimestamp(rec.clockIn),
+            clockOut: fmtTimestamp(rec.clockOut),
+            workedH: `${hh}:${String(mm).padStart(2, '0')}`,
+          };
+        });
+      }
     }
 
     days.push({
-      date: d, d: String(d.getDate()),
+      date: d, dateKey, d: String(d.getDate()),
       monthTh: MONTH_TH[d.getMonth()], monthEn: MONTH_EN[d.getMonth()],
       dowTh: DOW_TH[d.getDay()], dowEn: DOW_EN[d.getDay()],
-      isToday, isFuture, isWeekend, clockIn, clockOut, workedH, otH, live,
+      isToday, isFuture, clockIn, clockOut, workedH, otH, live, shifts, shiftDetails,
     });
   }
   return days;
@@ -141,16 +202,39 @@ function weekRangeLabel(days: DayEntry[], lang: Lang): string {
 }
 
 export function HistoryScreen({ theme, lang, tab, onTab }: HistoryScreenProps) {
-  const { clockState } = useApp();
+  const { clockState, user } = useApp();
   const now = useNow(60000);
   const [weekOffset, setWeekOffset] = useState(0);
+  const [records, setRecords] = useState<Map<string, AttendanceRecord[]>>(new Map());
 
-  const days = buildWeek(weekOffset, now, clockState);
+  useEffect(() => {
+    if (!user?.uid) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const recs = await getWeekRecords(user.uid);
+        if (cancelled) return;
+        const map = new Map<string, AttendanceRecord[]>();
+        for (const r of recs) {
+          const existing = map.get(r.date) ?? [];
+          existing.push(r);
+          map.set(r.date, existing);
+        }
+        for (const [, shifts] of map) {
+          shifts.sort((a, b) => (a.shift ?? 1) - (b.shift ?? 1));
+        }
+        setRecords(map);
+      } catch (err) { console.error(err); }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [user?.uid]);
 
-  const workDays = days.filter((d) => !d.isWeekend);
-  const totalH    = workDays.reduce((s, d) => s + parseH(d.workedH), 0);
-  const daysWorked = workDays.filter((d) => d.clockIn).length;
-  const totalOtH   = workDays.reduce((s, d) => s + d.otH, 0);
+  const days = buildWeek(weekOffset, now, clockState, records);
+
+  const totalH    = days.reduce((s, d) => s + parseH(d.workedH), 0);
+  const daysWorked = days.filter((d) => d.clockIn).length;
+  const totalOtH   = days.reduce((s, d) => s + d.otH, 0);
 
   const totalHStr   = `${Math.floor(totalH)}:${String(Math.round((totalH % 1) * 60)).padStart(2,'0')}`;
   const totalOtStr  = totalOtH > 0 ? `${Math.floor(totalOtH)}:${String(Math.round((totalOtH % 1) * 60)).padStart(2,'0')}` : '0:00';
@@ -207,7 +291,7 @@ export function HistoryScreen({ theme, lang, tab, onTab }: HistoryScreenProps) {
         <div style={{ padding: '18px 20px 24px' }}>
           <div style={{ background: theme.card, borderRadius: 22, overflow: 'hidden', border: `1px solid ${theme.line}` }}>
             {days.map((dy, i) => (
-              <DayRow key={i} theme={theme} lang={lang} dy={dy} last={i === days.length - 1} />
+              <DayRow key={dy.dateKey} theme={theme} lang={lang} dy={dy} last={i === days.length - 1} />
             ))}
           </div>
         </div>
@@ -229,42 +313,87 @@ function Tile({ theme, v, unit, label, highlight }: { theme: Theme; v: string; u
 }
 
 function DayRow({ theme, lang, dy, last }: { theme: Theme; lang: Lang; dy: DayEntry; last: boolean }) {
-  const dim = dy.isFuture || dy.isWeekend;
+  const [expanded, setExpanded] = useState(false);
+  const dim = dy.isFuture;
+  const tappable = !dim && dy.shiftDetails.length > 0;
+
   return (
-    <div style={{ padding: '14px 16px', borderBottom: last ? 'none' : `1px solid ${theme.line}`, display: 'flex', alignItems: 'center', gap: 14, opacity: dim ? 0.45 : 1 }}>
-      <div style={{ width: 46, textAlign: 'center', flexShrink: 0 }}>
-        <div style={{ fontFamily: FONT_TH, fontSize: 11, color: dy.isToday ? theme.primary : theme.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>
-          {lang === 'en' ? dy.dowEn : dy.dowTh}
+    <div style={{ borderBottom: last ? 'none' : `1px solid ${theme.line}` }}>
+      <div
+        onClick={tappable ? () => setExpanded((v) => !v) : undefined}
+        style={{
+          padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14,
+          opacity: dim ? 0.45 : 1,
+          cursor: tappable ? 'pointer' : 'default',
+        }}
+      >
+        <div style={{ width: 46, textAlign: 'center', flexShrink: 0 }}>
+          <div style={{ fontFamily: FONT_TH, fontSize: 11, color: dy.isToday ? theme.primary : theme.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>
+            {lang === 'en' ? dy.dowEn : dy.dowTh}
+          </div>
+          <div style={{ fontFamily: FONT_NUM, fontSize: 22, fontWeight: 800, color: dy.isToday ? theme.primary : theme.ink, lineHeight: 1, marginTop: 2 }}>{dy.d}</div>
+          <div style={{ fontFamily: FONT_TH, fontSize: 10, color: theme.inkMute, marginTop: 2 }}>{lang === 'en' ? dy.monthEn : dy.monthTh}</div>
         </div>
-        <div style={{ fontFamily: FONT_NUM, fontSize: 22, fontWeight: 800, color: dy.isToday ? theme.primary : theme.ink, lineHeight: 1, marginTop: 2 }}>{dy.d}</div>
-        <div style={{ fontFamily: FONT_TH, fontSize: 10, color: theme.inkMute, marginTop: 2 }}>{lang === 'en' ? dy.monthEn : dy.monthTh}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {dy.isFuture ? (
+            <div style={{ fontFamily: FONT_TH, fontSize: 13, color: theme.inkMute }}>—</div>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                <TimeCol theme={theme} label={lang === 'en' ? 'In' : 'เข้า'} v={dy.clockIn ?? '—'} />
+                <div style={{ width: 16, height: 1, background: theme.line }} />
+                <TimeCol
+                  theme={theme}
+                  label={lang === 'en' ? 'Out' : 'ออก'}
+                  v={dy.clockOut ?? (dy.live ? (lang === 'en' ? 'Now' : 'อยู่') : '—')}
+                  live={dy.live}
+                />
+              </div>
+              {dy.shifts > 1 && (
+                <div style={{ fontFamily: FONT_TH, fontSize: 11, color: theme.inkSoft, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {dy.shifts} {lang === 'en' ? 'shifts' : 'กะ'}
+                  <Icons.Chevron size={12} c={theme.inkMute} sw={2} dir={expanded ? 'up' : 'down'} />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontFamily: FONT_NUM, fontSize: 18, fontWeight: 800, color: theme.ink, fontVariantNumeric: 'tabular-nums' }}>{dy.workedH}</div>
+          {dy.otH > 0.05 && (
+            <div style={{ fontFamily: FONT_TH, fontSize: 11, color: theme.primary, fontWeight: 700, marginTop: 2 }}>
+              +{dy.otH.toFixed(1)} {lang === 'en' ? 'OT' : 'ล่วงเวลา'}
+            </div>
+          )}
+        </div>
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {dy.isWeekend ? (
-          <div style={{ fontFamily: FONT_TH, fontSize: 14, color: theme.inkSoft }}>{lang === 'en' ? 'Day off' : 'วันหยุด'}</div>
-        ) : dy.isFuture ? (
-          <div style={{ fontFamily: FONT_TH, fontSize: 13, color: theme.inkMute }}>—</div>
-        ) : (
-          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-            <TimeCol theme={theme} label={lang === 'en' ? 'In' : 'เข้า'} v={dy.clockIn ?? '—'} />
-            <div style={{ width: 16, height: 1, background: theme.line }} />
-            <TimeCol
-              theme={theme}
-              label={lang === 'en' ? 'Out' : 'ออก'}
-              v={dy.clockOut ?? (dy.live ? (lang === 'en' ? 'Now' : 'อยู่') : '—')}
-              live={dy.live}
-            />
+
+      {/* Expanded shift details */}
+      {expanded && dy.shiftDetails.length > 0 && (
+        <div style={{ padding: '0 16px 14px 62px' }}>
+          <div style={{ background: theme.surface, borderRadius: 12, overflow: 'hidden', border: `1px solid ${theme.line}` }}>
+            {dy.shiftDetails.map((sh, i) => (
+              <div key={sh.shift} style={{
+                padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12,
+                borderBottom: i < dy.shiftDetails.length - 1 ? `1px solid ${theme.line}` : 'none',
+              }}>
+                <div style={{
+                  fontFamily: FONT_TH, fontSize: 11, fontWeight: 700, color: theme.primaryInk,
+                  background: theme.primary, borderRadius: 6, padding: '2px 8px', flexShrink: 0,
+                }}>
+                  {lang === 'en' ? `S${sh.shift}` : `กะ${sh.shift}`}
+                </div>
+                <div style={{ flex: 1, display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontFamily: FONT_NUM, fontSize: 13, fontWeight: 600, color: theme.ink }}>{sh.clockIn ?? '—'}</span>
+                  <span style={{ color: theme.inkMute }}>→</span>
+                  <span style={{ fontFamily: FONT_NUM, fontSize: 13, fontWeight: 600, color: theme.ink }}>{sh.clockOut ?? '—'}</span>
+                </div>
+                <div style={{ fontFamily: FONT_NUM, fontSize: 13, fontWeight: 700, color: theme.inkSoft }}>{sh.workedH}</div>
+              </div>
+            ))}
           </div>
-        )}
-      </div>
-      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-        <div style={{ fontFamily: FONT_NUM, fontSize: 18, fontWeight: 800, color: theme.ink, fontVariantNumeric: 'tabular-nums' }}>{dy.workedH}</div>
-        {dy.otH > 0.05 && (
-          <div style={{ fontFamily: FONT_TH, fontSize: 11, color: theme.primary, fontWeight: 700, marginTop: 2 }}>
-            +{dy.otH.toFixed(1)} {lang === 'en' ? 'OT' : 'ล่วงเวลา'}
-          </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

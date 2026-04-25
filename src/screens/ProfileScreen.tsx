@@ -1,12 +1,19 @@
+import { useState, useEffect, useCallback } from 'react';
 import type { Theme, Lang, ThemeKey } from '../tokens';
-import { COPY, FONT_TH, FONT_EN, FONT_NUM, MOCK_EMPLOYEE, MOCK_SITES, THEMES } from '../tokens';
+import { COPY, FONT_TH, FONT_EN, FONT_NUM, THEMES } from '../tokens';
 import type { TabKey } from '../components/ui/TabBar';
 import { TabBar } from '../components/ui/TabBar';
 import { Icons } from '../components/ui/Icons';
+import { useSites } from '../hooks/useSites';
+import { useApp } from '../contexts/AppContext';
+import { getMonthRecords, upsertUserProfile } from '../services/firebase';
+import type { UserProfile } from '../services/firebase';
+import { requestNotificationPermission } from '../services/messaging';
 
 interface ProfileScreenProps {
   theme: Theme;
   lang: Lang;
+  profile: UserProfile | null;
   tab: TabKey;
   onTab: (t: TabKey) => void;
   onLangToggle: () => void;
@@ -21,8 +28,61 @@ const THEME_OPTS: { key: ThemeKey; label: { th: string; en: string } }[] = [
   { key: 'contrast', label: { th: 'เข้ม', en: 'Contrast' } },
 ];
 
-export function ProfileScreen({ theme, lang, tab, onTab, onLangToggle, onSignOut, themeKey, onThemeChange }: ProfileScreenProps) {
-  const emp = MOCK_EMPLOYEE;
+export function ProfileScreen({ theme, lang, profile, tab, onTab, onLangToggle, onSignOut, themeKey, onThemeChange }: ProfileScreenProps) {
+  const { sites } = useSites();
+  const { user } = useApp();
+  const primarySite = sites[0] ?? null;
+  const displayName = profile?.displayName || '...';
+  const pictureUrl = profile?.pictureUrl || '';
+  const avatar = profile?.displayName
+    ? profile.displayName.slice(0, 2).toUpperCase()
+    : '?';
+  const deptLabel = profile?.dept?.[lang] || '—';
+  const empId = profile?.employeeId || '—';
+
+  // Notification toggle
+  const notifEnabled = profile?.notificationsEnabled ?? false;
+  const [notifBusy, setNotifBusy] = useState(false);
+  const toggleNotifications = useCallback(async () => {
+    if (!user?.uid || notifBusy) return;
+    setNotifBusy(true);
+    try {
+      if (!notifEnabled) {
+        const token = await requestNotificationPermission(user.uid);
+        if (token) {
+          await upsertUserProfile(user.uid, { notificationsEnabled: true });
+        }
+      } else {
+        await upsertUserProfile(user.uid, { notificationsEnabled: false });
+      }
+    } catch (err) {
+      console.error('Notification toggle failed:', err);
+    } finally {
+      setNotifBusy(false);
+    }
+  }, [user?.uid, notifEnabled, notifBusy]);
+
+  // Monthly stats from Firestore
+  const [monthStats, setMonthStats] = useState({ totalH: '0', daysWorked: '0', otH: '0:00' });
+  useEffect(() => {
+    if (!user?.uid) return;
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    getMonthRecords(user.uid, ym).then((records) => {
+      const totalMin = records.reduce((s, r) => s + (r.workedMinutes ?? 0), 0);
+      const otMin = records.reduce((s, r) => s + (r.otMinutes ?? 0), 0);
+      const uniqueDates = new Set(records.filter((r) => r.clockIn).map((r) => r.date));
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      const otH = Math.floor(otMin / 60);
+      const otM = otMin % 60;
+      setMonthStats({
+        totalH: `${h}:${String(m).padStart(2, '0')}`,
+        daysWorked: String(uniqueDates.size),
+        otH: `${otH}:${String(otM).padStart(2, '0')}`,
+      });
+    }).catch(console.error);
+  }, [user?.uid]);
 
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: theme.bg, overflow: 'hidden' }}>
@@ -33,17 +93,21 @@ export function ProfileScreen({ theme, lang, tab, onTab, onLangToggle, onSignOut
             {COPY.profile[lang]}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 18 }}>
-            <div style={{
-              width: 68, height: 68, borderRadius: 20, background: theme.primarySoft, color: theme.primary,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: FONT_EN, fontSize: 26, fontWeight: 800,
-            }}>
-              {emp.avatar}
-            </div>
+            {pictureUrl ? (
+              <img src={pictureUrl} alt="" style={{ width: 68, height: 68, borderRadius: 20, objectFit: 'cover' }} />
+            ) : (
+              <div style={{
+                width: 68, height: 68, borderRadius: 20, background: theme.primarySoft, color: theme.primary,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: FONT_EN, fontSize: 26, fontWeight: 800,
+              }}>
+                {avatar}
+              </div>
+            )}
             <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: FONT_TH, fontSize: 19, fontWeight: 800, color: theme.ink }}>{emp.name[lang]}</div>
-              <div style={{ fontFamily: FONT_TH, fontSize: 13, color: theme.inkSoft, marginTop: 2 }}>{emp.dept[lang]}</div>
-              <div style={{ fontFamily: FONT_EN, fontSize: 12, color: theme.inkMute, marginTop: 3, letterSpacing: 0.4 }}>{emp.id}</div>
+              <div style={{ fontFamily: FONT_TH, fontSize: 19, fontWeight: 800, color: theme.ink }}>{displayName}</div>
+              <div style={{ fontFamily: FONT_TH, fontSize: 13, color: theme.inkSoft, marginTop: 2 }}>{deptLabel}</div>
+              <div style={{ fontFamily: FONT_EN, fontSize: 12, color: theme.inkMute, marginTop: 3, letterSpacing: 0.4 }}>{empId}</div>
             </div>
           </div>
         </div>
@@ -55,19 +119,10 @@ export function ProfileScreen({ theme, lang, tab, onTab, onLangToggle, onSignOut
           </div>
           <div style={{ background: theme.card, borderRadius: 22, padding: 18, border: `1px solid ${theme.line}` }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-              <MonthStat theme={theme} value="168" label={COPY.totalHours[lang]} />
-              <MonthStat theme={theme} value="21"  label={COPY.daysWorked[lang]} />
-              <MonthStat theme={theme} value="18.5" label={COPY.otThisMonth[lang]} highlight={theme.primary} />
+              <MonthStat theme={theme} value={monthStats.totalH} label={COPY.totalHours[lang]} />
+              <MonthStat theme={theme} value={monthStats.daysWorked} label={COPY.daysWorked[lang]} />
+              <MonthStat theme={theme} value={monthStats.otH} label={COPY.otThisMonth[lang]} highlight={theme.primary} />
             </div>
-            <button style={{
-              marginTop: 16, width: '100%', minHeight: 48, border: 'none', borderRadius: 14,
-              background: theme.ink, color: theme.card, cursor: 'pointer',
-              fontFamily: FONT_TH, fontSize: 15, fontWeight: 700,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}>
-              <Icons.Wallet size={18} c={theme.card} />
-              {COPY.payslip[lang]}
-            </button>
           </div>
         </div>
 
@@ -78,8 +133,8 @@ export function ProfileScreen({ theme, lang, tab, onTab, onLangToggle, onSignOut
           </div>
           <div style={{ background: theme.card, borderRadius: 20, border: `1px solid ${theme.line}`, overflow: 'hidden' }}>
             <SettingRow theme={theme} I={Icons.Globe}   label={COPY.language[lang]} value={lang === 'en' ? 'English' : 'ภาษาไทย'} onClick={onLangToggle} />
-            <SettingRow theme={theme} I={Icons.Bell}    label={COPY.notif[lang]}    value={lang === 'en' ? 'On' : 'เปิด'} />
-            <SettingRow theme={theme} I={Icons.Pin}     label={COPY.site[lang]}     value={MOCK_SITES[0].name[lang]} />
+            <SettingRow theme={theme} I={Icons.Bell}    label={COPY.notif[lang]}    value={notifBusy ? '...' : (notifEnabled ? (lang === 'en' ? 'On' : 'เปิด') : (lang === 'en' ? 'Off' : 'ปิด'))} onClick={toggleNotifications} />
+            <SettingRow theme={theme} I={Icons.Pin}     label={COPY.site[lang]}     value={primarySite ? primarySite.name[lang] : '—'} />
             {/* Theme picker */}
             <div style={{ padding: '12px 16px', borderTop: `1px solid ${theme.line}` }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>

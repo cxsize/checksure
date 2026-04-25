@@ -1,5 +1,6 @@
 import type { Theme, Lang } from '../tokens';
-import { COPY, FONT_TH, MOCK_SITES } from '../tokens';
+import { COPY, FONT_TH } from '../tokens';
+import { useSites } from '../hooks/useSites';
 import { BigButton } from '../components/ui/BigButton';
 import { BigTime } from '../components/ui/BigTime';
 import { Icons } from '../components/ui/Icons';
@@ -14,7 +15,8 @@ interface SuccessScreenProps {
 }
 
 export function SuccessScreen({ theme, lang, mode, time, siteId, onDone }: SuccessScreenProps) {
-  const site = MOCK_SITES.find((s) => s.id === siteId) ?? MOCK_SITES[0];
+  const { sites } = useSites();
+  const site = sites.find((s) => s.id === siteId) ?? sites[0] ?? null;
   const circleColor = mode === 'in' ? theme.accent : theme.primary;
 
   return (
@@ -36,7 +38,7 @@ export function SuccessScreen({ theme, lang, mode, time, siteId, onDone }: Succe
           </div>
           <BigTime value={time} theme={theme} size={56} />
           <div style={{ fontFamily: FONT_TH, fontSize: 14, color: theme.inkSoft, marginTop: 10 }}>
-            {site.name[lang]}
+            {site ? site.name[lang] : ''}
           </div>
         </div>
       </div>

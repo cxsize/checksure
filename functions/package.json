@@ -11,14 +11,23 @@
     "build:watch": "tsc --watch",
     "lint": "eslint \"src/**/*.ts\"",
     "serve": "npm run build && firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions"
+    "deploy": "firebase deploy --only functions",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "husky"
   },
   "dependencies": {
+    "express": "^5.2.1",
     "firebase-admin": "^12.0.0",
     "firebase-functions": "^6.0.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "@types/express": "^5.0.6",
     "@types/node": "^20.0.0",
-    "typescript": "^5.4.0"
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.5"
   }
 }

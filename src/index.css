@@ -42,4 +42,18 @@ html, body {
   100% { transform: scale(1);   opacity: 1; }
 }
 
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
 button { font-family: inherit; }
+
+/* Hide native date picker calendar icon */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}
+input[type="date"]::-webkit-inner-spin-button {
+  display: none;
+}

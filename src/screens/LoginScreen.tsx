@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import liff from '@line/liff';
 import type { Theme, Lang } from '../tokens';
 import { COPY, FONT_TH, FONT_EN } from '../tokens';
+import loginIllustration from '../assets/login-illustration.jpg';
 import { signInWithLineToken, auth } from '../services/firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { Icons } from '../components/ui/Icons';
@@ -60,13 +61,33 @@ export function LoginScreen({ theme, lang, onLogin }: LoginScreenProps) {
     }
   }
 
-  function handlePress() {
-    if (!liffReady) {
-      // Dev mode: sign in anonymously against the local Auth emulator
-      setLoading(true);
+  async function handleDevLogin() {
+    setLoading(true);
+    setError(null);
+    try {
+      // Dev mode: call lineAuth with a fake token — the emulator accepts anything
+      const apiBase = import.meta.env.VITE_API_BASE_URL as string;
+      const res = await fetch(`${apiBase}/lineAuth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: 'dev-test-token' }),
+      });
+      const body = (await res.json()) as { customToken?: string; error?: string };
+      if (!res.ok) throw new Error(body.error ?? 'Auth failed');
+      await signInWithLineToken(body.customToken!);
+      onLogin();
+    } catch (err) {
+      // Fallback to anonymous if lineAuth isn't running
+      console.warn('[Dev] lineAuth failed, falling back to anonymous:', err);
       signInAnonymously(auth)
         .then(() => onLogin())
-        .catch((err: Error) => { setError(err.message); setLoading(false); });
+        .catch((e: Error) => { setError(e.message); setLoading(false); });
+    }
+  }
+
+  function handlePress() {
+    if (!liffReady) {
+      handleDevLogin();
       return;
     }
     if (liff.isLoggedIn()) {
@@ -107,16 +128,15 @@ export function LoginScreen({ theme, lang, onLogin }: LoginScreenProps) {
         </div>
       </div>
 
-      {/* Illustration placeholder */}
+      {/* Illustration */}
       <div style={{
-        height: 120, borderRadius: 20, marginBottom: 24,
-        background: `repeating-linear-gradient(135deg, ${theme.surface}, ${theme.surface} 8px, ${theme.line} 8px, ${theme.line} 9px)`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        border: `1px dashed ${theme.line}`,
+        height: 140, borderRadius: 20, marginBottom: 24, overflow: 'hidden',
       }}>
-        <div style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, color: theme.inkMute, background: theme.bg, padding: '4px 10px', borderRadius: 6 }}>
-          [illustration · friendly factory worker]
-        </div>
+        <img
+          src={loginIllustration}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%' }}
+        />
       </div>
 
       {error && (

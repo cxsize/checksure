@@ -88,11 +88,8 @@ export const COPY = {
   today:         { th: 'วันนี้', en: 'Today' },
   notClockedIn:  { th: 'ยังไม่ได้ลงเวลา', en: 'Not clocked in' },
   clockedIn:     { th: 'กำลังทำงาน', en: 'Clocked in' },
-  onBreak:       { th: 'กำลังพัก', en: 'On break' },
   clockIn:       { th: 'ลงเวลาเข้า', en: 'Clock In' },
   clockOut:      { th: 'ลงเวลาออก', en: 'Clock Out' },
-  startBreak:    { th: 'เริ่มพัก', en: 'Start Break' },
-  endBreak:      { th: 'จบพัก', en: 'End Break' },
   hoursWorked:   { th: 'ชั่วโมงทำงาน', en: 'Hours worked' },
   hours:         { th: 'ชม.', en: 'h' },
   minutes:       { th: 'นาที', en: 'min' },
@@ -118,7 +115,6 @@ export const COPY = {
   totalHours:    { th: 'ชั่วโมงรวม', en: 'Total hours' },
   daysWorked:    { th: 'วันทำงาน', en: 'Days worked' },
   otThisMonth:   { th: 'OT เดือนนี้', en: 'OT this month' },
-  payslip:       { th: 'ดูสลิปเงินเดือน', en: 'View payslip' },
   requestLeave:  { th: 'ขอลา', en: 'Request leave' },
   leaveType:     { th: 'ประเภทการลา', en: 'Leave type' },
   leaveSick:     { th: 'ลาป่วย', en: 'Sick' },
@@ -160,12 +156,18 @@ export const MOCK_SITES: SiteData[] = [
   { id: 'plant-c', name: { th: 'คลังสินค้าลาดกระบัง', en: 'Lat Krabang Warehouse' }, addr: { th: 'กรุงเทพฯ', en: 'Bangkok' }, lat: 13.727, lng: 100.758, radiusM: 200, distance: 8200, inside: false },
 ];
 
-export const MOCK_EMPLOYEE = {
-  name: { th: 'สมชาย ใจดี', en: 'Somchai Jaidee' },
-  id: 'EMP-20481',
-  dept: { th: 'ฝ่ายผลิต · สาย A', en: 'Production · Line A' },
-  avatar: 'SJ',
-};
+// ─── Shared date/time format arrays ─────────────────────────────────────────
+
+export const MONTH_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+export const MONTH_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+export const DOW_TH = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+export const DOW_EN = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+/** Format a month label from a Date, e.g. "Apr 2026" / "เม.ย. 2569" */
+export function fmtMonth(d: Date, lang: Lang): string {
+  if (lang === 'en') return `${MONTH_EN[d.getMonth()]} ${d.getFullYear()}`;
+  return `${MONTH_TH[d.getMonth()]} ${d.getFullYear() + 543}`;
+}
 
 export function fmtTime(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;

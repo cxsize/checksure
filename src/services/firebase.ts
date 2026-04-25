@@ -12,8 +12,10 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   collection,
   query,
+  where,
   orderBy,
   limit,
   getDocs,
@@ -81,13 +83,12 @@ export async function upsertUserProfile(uid: string, data: Partial<UserProfile>)
 
 export interface AttendanceRecord {
   date: string;
+  shift: number;
   clockIn: Timestamp | null;
   clockOut: Timestamp | null;
-  breakMinutes: number;
   workedMinutes: number;
   otMinutes: number;
   siteId: string | null;
-  status: 'in' | 'out' | 'break';
 }
 
 function todayKey() {
@@ -95,56 +96,85 @@ function todayKey() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-export async function getTodayRecord(uid: string): Promise<AttendanceRecord | null> {
-  const snap = await getDoc(doc(db, 'attendance', uid, 'records', todayKey()));
-  return snap.exists() ? (snap.data() as AttendanceRecord) : null;
+/** Get all shifts for today, ordered by shift number */
+export async function getTodayShifts(uid: string): Promise<AttendanceRecord[]> {
+  const key = todayKey();
+  const q = query(
+    collection(db, 'attendance', uid, 'records'),
+    orderBy('shift', 'asc'),
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => d.data() as AttendanceRecord)
+    .filter((r) => r.date === key);
 }
 
-export async function clockIn(uid: string, siteId: string): Promise<void> {
+export async function clockIn(uid: string, siteId: string): Promise<number> {
   const key = todayKey();
-  await setDoc(doc(db, 'attendance', uid, 'records', key), {
+  // Find existing shifts today to determine shift number
+  const existing = await getTodayShifts(uid);
+  const shiftNum = existing.length + 1;
+  const docId = `${key}_shift${shiftNum}`;
+  await setDoc(doc(db, 'attendance', uid, 'records', docId), {
     date: key,
+    shift: shiftNum,
     clockIn: serverTimestamp(),
     clockOut: null,
-    breakMinutes: 0,
     workedMinutes: 0,
     otMinutes: 0,
     siteId,
-    status: 'in',
   });
+  return shiftNum;
 }
 
 export async function clockOut(uid: string): Promise<void> {
   const key = todayKey();
-  const ref = doc(db, 'attendance', uid, 'records', key);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-  const record = snap.data() as AttendanceRecord;
-  const clockInTs = record.clockIn as Timestamp;
-  const now = Timestamp.now();
-  const workedMs = now.toMillis() - clockInTs.toMillis() - record.breakMinutes * 60000;
-  const workedMinutes = Math.max(0, Math.floor(workedMs / 60000));
-  const otMinutes = Math.max(0, workedMinutes - 480);
-  await updateDoc(ref, { clockOut: now, workedMinutes, otMinutes, status: 'out' });
+  // Find the latest open shift (no clockOut)
+  const shifts = await getTodayShifts(uid);
+  const openShift = shifts.find((s) => s.clockOut === null);
+  if (!openShift) return;
+  const docId = `${key}_shift${openShift.shift}`;
+  const ref = doc(db, 'attendance', uid, 'records', docId);
+  // workedMinutes/otMinutes are calculated server-side by onAttendanceUpdate Cloud Function.
+  await updateDoc(ref, { clockOut: serverTimestamp() });
 }
 
-export async function startBreak(uid: string): Promise<void> {
-  await updateDoc(doc(db, 'attendance', uid, 'records', todayKey()), { status: 'break' });
-}
-
-export async function endBreak(uid: string, extraMinutes: number): Promise<void> {
-  const key = todayKey();
-  const ref = doc(db, 'attendance', uid, 'records', key);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return;
-  const current = (snap.data() as AttendanceRecord).breakMinutes;
-  await updateDoc(ref, { breakMinutes: current + extraMinutes, status: 'in' });
-}
-
+/** Get all records (all shifts), most recent first */
 export async function getWeekRecords(uid: string): Promise<AttendanceRecord[]> {
-  const q = query(collection(db, 'attendance', uid, 'records'), orderBy('date', 'desc'), limit(7));
+  const q = query(collection(db, 'attendance', uid, 'records'), orderBy('date', 'desc'), limit(60));
   const snap = await getDocs(q);
   return snap.docs.map((d) => d.data() as AttendanceRecord);
+}
+
+/** Get all records for a given month (YYYY-MM) */
+export async function getMonthRecords(uid: string, yearMonth: string): Promise<AttendanceRecord[]> {
+  const startDate = `${yearMonth}-01`;
+  const endDate = `${yearMonth}-31`; // safe: Firestore string compare handles this
+  const q = query(
+    collection(db, 'attendance', uid, 'records'),
+    where('date', '>=', startDate),
+    where('date', '<=', endDate),
+    orderBy('date', 'desc'),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => d.data() as AttendanceRecord);
+}
+
+// ─── Sites ───────────────────────────────────────────────────────────────────
+
+export interface SiteRecord {
+  name: { th: string; en: string };
+  addr: { th: string; en: string };
+  lat: number;
+  lng: number;
+  radiusM: number;
+  active: boolean;
+}
+
+export async function getSites(): Promise<(SiteRecord & { id: string })[]> {
+  const q = query(collection(db, 'sites'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as SiteRecord) }));
 }
 
 // ─── Leave requests ───────────────────────────────────────────────────────────
@@ -168,4 +198,8 @@ export async function getRecentLeaveRequests(uid: string): Promise<LeaveRequest[
   const q = query(collection(db, 'leaveRequests', uid, 'requests'), orderBy('createdAt', 'desc'), limit(5));
   const snap = await getDocs(q);
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as LeaveRequest));
+}
+
+export async function cancelLeaveRequest(uid: string, requestId: string): Promise<void> {
+  await deleteDoc(doc(db, 'leaveRequests', uid, 'requests', requestId));
 }

@@ -3,21 +3,81 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Each user can read and write only their own profile.
-    // The backend (Admin SDK) creates the document on first login;
-    // the client may update preference fields (theme, lang, notifications).
+    // ── Users ─────────────────────────────────────────────────────────────
+    // Backend (Admin SDK) creates the document on first login with all fields.
+    // Client may only read own profile and update preference fields.
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // Client can only update lang, theme, notificationsEnabled
+      allow update: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['lang', 'theme', 'notificationsEnabled']);
+
+      // Client cannot create or delete user documents (Admin SDK only)
+      allow create, delete: if false;
     }
 
-    // Daily attendance records are private to the employee.
-    match /attendance/{uid}/records/{date} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+    // ── Attendance ────────────────────────────────────────────────────────
+    match /attendance/{uid}/records/{recordId} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // Create: client can clock in — must set required fields correctly
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.data.keys().hasAll(
+                         ['date', 'shift', 'clockIn', 'clockOut', 'workedMinutes', 'otMinutes', 'siteId'])
+                    && request.resource.data.clockOut == null
+                    && request.resource.data.workedMinutes == 0
+                    && request.resource.data.otMinutes == 0
+                    && request.resource.data.shift is int
+                    && request.resource.data.date is string
+                    && request.resource.data.siteId is string;
+
+      // Update: client can only set clockOut (once); workedMinutes/otMinutes
+      // are updated by the Cloud Function (Admin SDK bypasses rules)
+      allow update: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['clockOut'])
+                    // clockOut must have been null before
+                    && resource.data.clockOut == null
+                    // Cannot change clockIn, siteId, date, shift
+                    && request.resource.data.clockIn == resource.data.clockIn
+                    && request.resource.data.siteId == resource.data.siteId
+                    && request.resource.data.date == resource.data.date
+                    && request.resource.data.shift == resource.data.shift;
+
+      allow delete: if false;
     }
 
-    // Leave requests are private to the employee.
+    // ── Leave Requests ────────────────────────────────────────────────────
     match /leaveRequests/{uid}/requests/{requestId} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // Client can create leave requests, but only with status 'pending'
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.keys().hasAll(
+                         ['type', 'fromDate', 'toDate', 'reason', 'status', 'createdAt'])
+                    && request.resource.data.type in ['sick', 'personal', 'vacation'];
+
+      // Client cannot update leave requests (admin approval via Admin SDK)
+      allow update: if false;
+
+      // Client can delete (cancel) own pending requests only
+      allow delete: if request.auth != null
+                    && request.auth.uid == uid
+                    && resource.data.status == 'pending';
+    }
+
+    // ── Sites ─────────────────────────────────────────────────────────────
+    // All authenticated users can read sites; only Admin SDK can write
+    match /sites/{siteId} {
+      allow read: if request.auth != null;
+      allow write: if false;
     }
   }
 }

@@ -25,7 +25,7 @@ export function TabBar({ tab, onTab, theme, lang }: TabBarProps) {
       background: theme.card,
       borderTop: `1px solid ${theme.line}`,
       display: 'flex',
-      padding: '10px 8px 28px',
+      paddingBottom: 28,
     }}>
       {TABS.map(({ key, copyKey, Icon }) => {
         const active = tab === key;
@@ -36,19 +36,24 @@ export function TabBar({ tab, onTab, theme, lang }: TabBarProps) {
             onClick={() => onTab(key)}
             style={{
               flex: 1,
+              minHeight: 56,
               border: 'none',
-              background: 'transparent',
+              background: active ? theme.primarySoft : 'transparent',
+              borderRadius: 0,
               cursor: 'pointer',
-              padding: '8px 4px',
+              padding: '10px 4px 6px',
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
-              gap: 4,
+              justifyContent: 'center',
+              gap: 3,
               color: active ? theme.primary : theme.inkMute,
+              transition: 'background 0.15s ease',
+              WebkitTapHighlightColor: 'transparent',
             }}
           >
-            <I size={26} c={active ? theme.primary : theme.inkMute} sw={active ? 2.2 : 1.8} />
-            <div style={{ fontFamily: FONT_TH, fontSize: 12, fontWeight: active ? 700 : 500 }}>
+            <I size={22} c={active ? theme.primary : theme.inkMute} sw={active ? 2.2 : 1.8} />
+            <div style={{ fontFamily: FONT_TH, fontSize: 11, fontWeight: active ? 700 : 500 }}>
               {COPY[copyKey][lang]}
             </div>
           </button>
