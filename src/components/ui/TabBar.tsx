@@ -21,11 +21,11 @@ const TABS: { key: TabKey; copyKey: keyof typeof COPY; Icon: keyof typeof Icons 
 export function TabBar({ tab, onTab, theme, lang }: TabBarProps) {
   return (
     <div style={{
-      flexShrink: 0,
+      width: '100%',
+      height: '100%',
       background: theme.card,
       borderTop: `1px solid ${theme.line}`,
       display: 'flex',
-      paddingBottom: 28,
     }}>
       {TABS.map(({ key, copyKey, Icon }) => {
         const active = tab === key;

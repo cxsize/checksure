@@ -5,15 +5,11 @@ import { useApp } from '../contexts/AppContext';
 import { submitLeave, getRecentLeaveRequests, cancelLeaveRequest } from '../services/firebase';
 import type { LeaveRequest } from '../services/firebase';
 import { BigButton } from '../components/ui/BigButton';
-import type { TabKey } from '../components/ui/TabBar';
-import { TabBar } from '../components/ui/TabBar';
 import { Icons } from '../components/ui/Icons';
 
 interface LeaveScreenProps {
   theme: Theme;
   lang: Lang;
-  tab: TabKey;
-  onTab: (t: TabKey) => void;
 }
 
 type LeaveType = 'sick' | 'personal' | 'vacation';
@@ -59,7 +55,7 @@ function datesOverlap(fromA: string, toA: string, fromB: string, toB: string): b
   return fromA <= toB && fromB <= toA;
 }
 
-export function LeaveScreen({ theme, lang, tab, onTab }: LeaveScreenProps) {
+export function LeaveScreen({ theme, lang }: LeaveScreenProps) {
   const { user } = useApp();
   const [type, setType] = useState<LeaveType>('sick');
   const [fromDate, setFromDate] = useState(todayIso);
@@ -180,8 +176,7 @@ export function LeaveScreen({ theme, lang, tab, onTab }: LeaveScreenProps) {
     : `${fmtDisplayDate(toDate, lang)} (${days} วัน)`;
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: theme.bg, overflow: 'hidden' }}>
-      <div style={{ flex: 1, overflow: 'auto' }}>
+    <div style={{ background: theme.bg, minHeight: '100%' }}>
         <div style={{ padding: '22px 24px 12px' }}>
           <div style={{ fontFamily: FONT_TH, fontSize: 28, fontWeight: 800, color: theme.ink, letterSpacing: -0.3 }}>
             {COPY.requestLeave[lang]}
@@ -216,10 +211,11 @@ export function LeaveScreen({ theme, lang, tab, onTab }: LeaveScreenProps) {
 
         {/* Date fields */}
         <div style={{ padding: '18px 20px 0' }}>
-          <DateField theme={theme}
+          <DateField theme={theme} lang={lang}
             label={COPY.leaveDate[lang]} value={fromDate} onChange={handleFromDate}
+            displayOverride={fmtDisplayDate(fromDate, lang)}
           />
-          <DateField theme={theme}
+          <DateField theme={theme} lang={lang}
             label={lang === 'en' ? 'To' : 'ถึง'} value={toDate} onChange={handleToDate}
             displayOverride={toLabel}
           />
@@ -350,7 +346,6 @@ export function LeaveScreen({ theme, lang, tab, onTab }: LeaveScreenProps) {
             );
           })()}
         </div>
-      </div>
 
       <div style={{ padding: '12px 20px 12px', background: theme.bg, borderTop: `1px solid ${theme.line}` }}>
         <BigButton
@@ -366,8 +361,6 @@ export function LeaveScreen({ theme, lang, tab, onTab }: LeaveScreenProps) {
           }
         />
       </div>
-      <TabBar tab={tab} onTab={onTab} theme={theme} lang={lang} />
-
       {/* Replace confirmation popup */}
       {confirmReplace && (
         <div
@@ -509,6 +502,7 @@ export function LeaveScreen({ theme, lang, tab, onTab }: LeaveScreenProps) {
 
 interface DateFieldProps {
   theme: Theme;
+  lang: Lang;
   label: string;
   value: string;
   onChange: (v: string) => void;
@@ -525,30 +519,28 @@ function DateField({ theme, label, value, onChange, displayOverride }: DateField
   return (
     <div
       onClick={handleClick}
-      style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 16, padding: '12px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
+      style={{ background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 16, padding: '12px 14px', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', position: 'relative' }}
     >
       <div style={{ width: 36, height: 36, borderRadius: 10, background: theme.surface, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         <Icons.Calendar size={18} c={theme.ink} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontFamily: FONT_TH, fontSize: 11, color: theme.inkSoft, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>{label}</div>
-        {displayOverride && (
-          <div style={{ fontFamily: FONT_TH, fontSize: 13, fontWeight: 600, color: theme.inkSoft, marginTop: 2 }}>
-            {displayOverride}
-          </div>
-        )}
-        <input
-          ref={inputRef}
-          type="date"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          style={{
-            fontFamily: FONT_TH, fontSize: 15, fontWeight: 600, color: theme.ink,
-            marginTop: 2, border: 'none', outline: 'none', background: 'transparent',
-            width: '100%', padding: 0, cursor: 'pointer',
-          }}
-        />
+        <div style={{ fontFamily: FONT_TH, fontSize: 15, fontWeight: 600, color: theme.ink, marginTop: 2 }}>
+          {displayOverride || value}
+        </div>
       </div>
+      {/* Hidden native date input — only used to trigger the picker */}
+      <input
+        ref={inputRef}
+        type="date"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer',
+          width: '100%', height: '100%',
+        }}
+      />
     </div>
   );
 }

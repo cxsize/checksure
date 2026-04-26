@@ -6,15 +6,11 @@ import { useNow } from '../hooks/useNow';
 import { getWeekRecords } from '../services/firebase';
 import type { AttendanceRecord } from '../services/firebase';
 import { Timestamp } from 'firebase/firestore';
-import type { TabKey } from '../components/ui/TabBar';
-import { TabBar } from '../components/ui/TabBar';
 import { Icons } from '../components/ui/Icons';
 
 interface HistoryScreenProps {
   theme: Theme;
   lang: Lang;
-  tab: TabKey;
-  onTab: (t: TabKey) => void;
 }
 
 
@@ -201,7 +197,7 @@ function weekRangeLabel(days: DayEntry[], lang: Lang): string {
   }
 }
 
-export function HistoryScreen({ theme, lang, tab, onTab }: HistoryScreenProps) {
+export function HistoryScreen({ theme, lang }: HistoryScreenProps) {
   const { clockState, user } = useApp();
   const now = useNow(60000);
   const [weekOffset, setWeekOffset] = useState(0);
@@ -254,8 +250,7 @@ export function HistoryScreen({ theme, lang, tab, onTab }: HistoryScreenProps) {
   });
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: theme.bg, overflow: 'hidden' }}>
-      <div style={{ flex: 1, overflow: 'auto' }}>
+    <div style={{ background: theme.bg, minHeight: '100%' }}>
         {/* Header with week navigation */}
         <div style={{ padding: '22px 24px 12px', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
           <div style={{ flex: 1 }}>
@@ -295,8 +290,6 @@ export function HistoryScreen({ theme, lang, tab, onTab }: HistoryScreenProps) {
             ))}
           </div>
         </div>
-      </div>
-      <TabBar tab={tab} onTab={onTab} theme={theme} lang={lang} />
     </div>
   );
 }

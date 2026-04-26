@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Theme, Lang, ThemeKey } from '../tokens';
 import { COPY, FONT_TH, FONT_EN, FONT_NUM, THEMES } from '../tokens';
-import type { TabKey } from '../components/ui/TabBar';
-import { TabBar } from '../components/ui/TabBar';
 import { Icons } from '../components/ui/Icons';
 import { useSites } from '../hooks/useSites';
 import { useApp } from '../contexts/AppContext';
@@ -14,8 +12,6 @@ interface ProfileScreenProps {
   theme: Theme;
   lang: Lang;
   profile: UserProfile | null;
-  tab: TabKey;
-  onTab: (t: TabKey) => void;
   onLangToggle: () => void;
   onSignOut: () => void;
   themeKey: ThemeKey;
@@ -28,7 +24,7 @@ const THEME_OPTS: { key: ThemeKey; label: { th: string; en: string } }[] = [
   { key: 'contrast', label: { th: 'เข้ม', en: 'Contrast' } },
 ];
 
-export function ProfileScreen({ theme, lang, profile, tab, onTab, onLangToggle, onSignOut, themeKey, onThemeChange }: ProfileScreenProps) {
+export function ProfileScreen({ theme, lang, profile, onLangToggle, onSignOut, themeKey, onThemeChange }: ProfileScreenProps) {
   const { sites } = useSites();
   const { user } = useApp();
   const primarySite = sites[0] ?? null;
@@ -85,8 +81,7 @@ export function ProfileScreen({ theme, lang, profile, tab, onTab, onLangToggle, 
   }, [user?.uid]);
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: theme.bg, overflow: 'hidden' }}>
-      <div style={{ flex: 1, overflow: 'auto' }}>
+    <div style={{ background: theme.bg, minHeight: '100%' }}>
         {/* Profile header */}
         <div style={{ padding: '22px 24px 0', background: theme.card, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, paddingBottom: 24 }}>
           <div style={{ fontFamily: FONT_TH, fontSize: 28, fontWeight: 800, color: theme.ink, letterSpacing: -0.3 }}>
@@ -177,8 +172,6 @@ export function ProfileScreen({ theme, lang, profile, tab, onTab, onLangToggle, 
             </button>
           </div>
         </div>
-      </div>
-      <TabBar tab={tab} onTab={onTab} theme={theme} lang={lang} />
     </div>
   );
 }

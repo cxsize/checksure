@@ -13,6 +13,7 @@ import { onForegroundMessage } from './services/messaging';
 import { enqueue } from './services/offlineQueue';
 import { useOfflineSync } from './hooks/useOfflineSync';
 import type { TabKey } from './components/ui/TabBar';
+import { TabBar } from './components/ui/TabBar';
 
 // Lazy-loaded screens (not needed on initial render)
 const ClockInScreen = lazy(() => import('./screens/ClockInScreen').then(m => ({ default: m.ClockInScreen })));
@@ -184,22 +185,31 @@ export function App() {
           shift={clockState.shift}
           profile={profile}
           onClockIn={goClockIn} onClockOut={goClockOut}
-          tab={tab} onTab={setTab}
         />
       );
       break;
     case 'history':
-      screen = <Suspense fallback={fallback}><HistoryScreen theme={theme} lang={lang} tab={tab} onTab={setTab} /></Suspense>;
+      screen = <Suspense fallback={fallback}><HistoryScreen theme={theme} lang={lang} /></Suspense>;
       break;
     case 'leave':
-      screen = <Suspense fallback={fallback}><LeaveScreen theme={theme} lang={lang} tab={tab} onTab={setTab} /></Suspense>;
+      screen = <Suspense fallback={fallback}><LeaveScreen theme={theme} lang={lang} /></Suspense>;
       break;
     case 'profile':
-      screen = <Suspense fallback={fallback}><ProfileScreen theme={theme} lang={lang} profile={profile} tab={tab} onTab={setTab} onLangToggle={toggleLang} onSignOut={handleSignOut} themeKey={themeKey} onThemeChange={setThemeKey} /></Suspense>;
+      screen = <Suspense fallback={fallback}><ProfileScreen theme={theme} lang={lang} profile={profile} onLangToggle={toggleLang} onSignOut={handleSignOut} themeKey={themeKey} onThemeChange={setThemeKey} /></Suspense>;
       break;
   }
 
-  return <>{screen}{toastOverlay}</>;
+  return (
+    <>
+      <div id="app-content">
+        {screen}
+      </div>
+      <div id="app-tabbar">
+        <TabBar tab={tab} onTab={setTab} theme={theme} lang={lang} />
+      </div>
+      {toastOverlay}
+    </>
+  );
 }
 
 export default App;

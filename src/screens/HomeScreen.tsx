@@ -3,13 +3,10 @@ import { COPY, FONT_TH, FONT_EN, FONT_NUM, fmtTime, fmtDateTh } from '../tokens'
 import { useNow } from '../hooks/useNow';
 import { BigButton } from '../components/ui/BigButton';
 import { StatusChip } from '../components/ui/StatusChip';
-import type { TabKey } from '../components/ui/TabBar';
-import { TabBar } from '../components/ui/TabBar';
 import { BigTime } from '../components/ui/BigTime';
 import { Icons } from '../components/ui/Icons';
 import type { AppStatus } from '../contexts/AppContext';
 import type { UserProfile } from '../services/firebase';
-import type { CSSProperties } from 'react';
 
 interface HomeScreenProps {
   theme: Theme;
@@ -20,11 +17,9 @@ interface HomeScreenProps {
   profile: UserProfile | null;
   onClockIn: () => void;
   onClockOut: () => void;
-  tab: TabKey;
-  onTab: (t: TabKey) => void;
 }
 
-export function HomeScreen({ theme, lang, status, clockInTime, shift, profile, onClockIn, onClockOut, tab, onTab }: HomeScreenProps) {
+export function HomeScreen({ theme, lang, status, clockInTime, shift, profile, onClockIn, onClockOut }: HomeScreenProps) {
   const now = useNow(60000);
   const displayName = profile?.displayName || '...';
   const pictureUrl = profile?.pictureUrl || '';
@@ -47,8 +42,7 @@ export function HomeScreen({ theme, lang, status, clockInTime, shift, profile, o
   );
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: theme.bg, overflow: 'hidden' }}>
-      <div style={{ flex: 1, overflow: 'auto' }}>
+    <div style={{ background: theme.bg, minHeight: '100%' }}>
         {/* Header */}
         <div style={{ padding: '20px 24px 8px', display: 'flex', alignItems: 'center', gap: 14 }}>
           {pictureUrl ? (
@@ -130,15 +124,6 @@ export function HomeScreen({ theme, lang, status, clockInTime, shift, profile, o
           )}
         </div>
 
-        {/* Quick actions */}
-        <div style={{ padding: '4px 20px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <QuickAction theme={theme} icon={<Icons.Calendar size={18} c={theme.ink} />} label={lang === 'en' ? 'History' : 'ประวัติ'} sub={lang === 'en' ? 'This week' : 'สัปดาห์นี้'} onClick={() => onTab('history')} />
-        </div>
-      </div>
-
-      <TabBar tab={tab} onTab={onTab} theme={theme} lang={lang} />
-
-      {/* Site picker popup */}
     </div>
   );
 }
@@ -155,20 +140,3 @@ function Stat({ theme, label, value, unit, highlight }: { theme: Theme; label: s
   );
 }
 
-function QuickAction({ theme, icon, label, sub, onClick }: { theme: Theme; icon: React.ReactNode; label: string; sub: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{
-      background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 18,
-      padding: 16, textAlign: 'left', cursor: 'pointer',
-      display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start',
-    } as CSSProperties}>
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: theme.surface, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {icon}
-      </div>
-      <div>
-        <div style={{ fontFamily: FONT_TH, fontSize: 15, fontWeight: 700, color: theme.ink }}>{label}</div>
-        <div style={{ fontFamily: FONT_TH, fontSize: 12, color: theme.inkSoft, marginTop: 2 }}>{sub}</div>
-      </div>
-    </button>
-  );
-}
