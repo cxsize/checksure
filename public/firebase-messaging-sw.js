@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 // Firebase Cloud Messaging service worker
 // This file MUST live at the root of the domain (served from /public by Vite)
 

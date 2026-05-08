@@ -17,28 +17,33 @@ import {
 } from 'firebase/firestore';
 
 const PROJECT_ID = 'rules-test';
+// Skip all tests in this file when the Firestore emulator is not running.
+const EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST ?? 'localhost:8080';
+const emulatorRunning = !!process.env.FIRESTORE_EMULATOR_HOST;
 
 let testEnv: RulesTestEnvironment;
 
 beforeAll(async () => {
+  if (!emulatorRunning) return;
   const rules = readFileSync(resolve(__dirname, '../../firestore.rules'), 'utf8');
+  const [host, portStr] = EMULATOR_HOST.split(':');
   testEnv = await initializeTestEnvironment({
     projectId: PROJECT_ID,
-    firestore: { rules, host: 'localhost', port: 8080 },
+    firestore: { rules, host, port: Number(portStr) },
   });
 });
 
 afterAll(async () => {
-  await testEnv.cleanup();
+  if (emulatorRunning) await testEnv?.cleanup();
 });
 
 beforeEach(async () => {
-  await testEnv.clearFirestore();
+  if (emulatorRunning) await testEnv?.clearFirestore();
 });
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
-describe('users rules', () => {
+describe.runIf(emulatorRunning)('users rules', () => {
   it('allows authenticated user to read own profile', async () => {
     // Seed data via admin
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
@@ -123,7 +128,7 @@ describe('users rules', () => {
 
 // ─── Attendance ───────────────────────────────────────────────────────────────
 
-describe('attendance rules', () => {
+describe.runIf(emulatorRunning)('attendance rules', () => {
   const validRecord = {
     date: '2026-04-25',
     shift: 1,
@@ -282,7 +287,7 @@ describe('attendance rules', () => {
 
 // ─── Leave Requests ──────────────────────────────────────────────────────────
 
-describe('leave request rules', () => {
+describe.runIf(emulatorRunning)('leave request rules', () => {
   it('allows user to create valid leave request', async () => {
     const user1 = testEnv.authenticatedContext('user1');
     await assertSucceeds(
@@ -392,7 +397,7 @@ describe('leave request rules', () => {
 
 // ─── Sites ───────────────────────────────────────────────────────────────────
 
-describe('sites rules', () => {
+describe.runIf(emulatorRunning)('sites rules', () => {
   it('allows authenticated user to read sites', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'sites/plant-a'), {

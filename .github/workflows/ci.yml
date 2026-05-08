@@ -48,4 +48,18 @@ jobs:
 
       - name: Test functions (unit)
         working-directory: functions
-        run: npx vitest run -- test/attendance-logic.test.ts
+        run: npx vitest run test/attendance-logic.test.ts
+
+      - name: Set up Java (required for Firebase emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Test functions (integration – Firestore rules)
+        working-directory: functions
+        run: |
+          npx firebase-tools@15 emulators:exec \
+            --project demo-test \
+            --only firestore \
+            "npx vitest run test/firestore.rules.test.ts"
