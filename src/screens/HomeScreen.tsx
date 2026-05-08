@@ -1,43 +1,35 @@
 import type { Theme, Lang } from '../tokens';
-import { COPY, FONT_TH, FONT_EN, FONT_NUM, MOCK_SITES, MOCK_EMPLOYEE, fmtTime, fmtDateTh } from '../tokens';
+import { COPY, FONT_TH, FONT_EN, FONT_NUM, fmtTime, fmtDateTh } from '../tokens';
 import { useNow } from '../hooks/useNow';
 import { BigButton } from '../components/ui/BigButton';
-import { GhostButton } from '../components/ui/GhostButton';
 import { StatusChip } from '../components/ui/StatusChip';
-import type { TabKey } from '../components/ui/TabBar';
-import { TabBar } from '../components/ui/TabBar';
 import { BigTime } from '../components/ui/BigTime';
 import { Icons } from '../components/ui/Icons';
 import type { AppStatus } from '../contexts/AppContext';
-import type { CSSProperties } from 'react';
+import type { UserProfile } from '../services/firebase';
 
 interface HomeScreenProps {
   theme: Theme;
   lang: Lang;
   status: AppStatus;
   clockInTime: Date | null;
-  breakStartTime: Date | null;
-  breakMinutes: number;
+  shift: number;
+  profile: UserProfile | null;
   onClockIn: () => void;
   onClockOut: () => void;
-  onBreak: () => void;
-  tab: TabKey;
-  onTab: (t: TabKey) => void;
 }
 
-export function HomeScreen({ theme, lang, status, clockInTime, breakStartTime, breakMinutes, onClockIn, onClockOut, onBreak, tab, onTab }: HomeScreenProps) {
+export function HomeScreen({ theme, lang, status, clockInTime, shift, profile, onClockIn, onClockOut }: HomeScreenProps) {
   const now = useNow(60000);
-  const site = MOCK_SITES[0];
-  const emp = MOCK_EMPLOYEE;
-
-  // Accumulate live break time when currently on break
-  const liveBreakMinutes = status === 'break' && breakStartTime
-    ? breakMinutes + Math.floor((now.getTime() - breakStartTime.getTime()) / 60000)
-    : breakMinutes;
+  const displayName = profile?.displayName || '...';
+  const pictureUrl = profile?.pictureUrl || '';
+  const avatar = profile?.displayName
+    ? profile.displayName.slice(0, 2).toUpperCase()
+    : '?';
 
   let workedMs = 0;
-  if (clockInTime) {
-    workedMs = now.getTime() - clockInTime.getTime() - liveBreakMinutes * 60000;
+  if (clockInTime && status === 'in') {
+    workedMs = now.getTime() - clockInTime.getTime();
   }
   const workedH = Math.max(0, Math.floor(workedMs / 3600000));
   const workedM = Math.max(0, Math.floor((workedMs % 3600000) / 60000));
@@ -50,20 +42,23 @@ export function HomeScreen({ theme, lang, status, clockInTime, breakStartTime, b
   );
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: theme.bg, overflow: 'hidden' }}>
-      <div style={{ flex: 1, overflow: 'auto' }}>
+    <div style={{ background: theme.bg, minHeight: '100%' }}>
         {/* Header */}
         <div style={{ padding: '20px 24px 8px', display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: 14, background: theme.primarySoft, color: theme.primary,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontFamily: FONT_EN, fontSize: 17, fontWeight: 700,
-          }}>
-            {emp.avatar}
-          </div>
+          {pictureUrl ? (
+            <img src={pictureUrl} alt="" style={{ width: 48, height: 48, borderRadius: 14, objectFit: 'cover' }} />
+          ) : (
+            <div style={{
+              width: 48, height: 48, borderRadius: 14, background: theme.primarySoft, color: theme.primary,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontFamily: FONT_EN, fontSize: 17, fontWeight: 700,
+            }}>
+              {avatar}
+            </div>
+          )}
           <div style={{ flex: 1 }}>
             <div style={{ fontFamily: FONT_TH, fontSize: 13, color: theme.inkSoft }}>{COPY.hi[lang]}</div>
-            <div style={{ fontFamily: FONT_TH, fontSize: 17, fontWeight: 700, color: theme.ink }}>{emp.name[lang]}</div>
+            <div style={{ fontFamily: FONT_TH, fontSize: 17, fontWeight: 700, color: theme.ink }}>{displayName}</div>
           </div>
           <div style={{ width: 44, height: 44, borderRadius: 22, border: `1px solid ${theme.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', background: theme.card }}>
             <Icons.Bell size={20} c={theme.ink} sw={1.8} />
@@ -88,7 +83,7 @@ export function HomeScreen({ theme, lang, status, clockInTime, breakStartTime, b
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0, borderTop: `1px solid ${theme.line}`, paddingTop: 18 }}>
                 <Stat theme={theme} label={lang === 'en' ? 'Clock-in' : 'เข้างาน'} value={clockInTime ? fmtTime(clockInTime) : '—'} />
                 <Stat theme={theme} label={COPY.hoursWorked[lang]} value={`${workedH}:${String(workedM).padStart(2, '0')}`} highlight={isOT ? theme.primary : undefined} />
-                <Stat theme={theme} label={lang === 'en' ? 'Break' : 'พัก'} value={`${liveBreakMinutes}`} unit={COPY.minutes[lang]} />
+                <Stat theme={theme} label={lang === 'en' ? 'Shift' : 'กะ'} value={`${shift}`} />
               </div>
             ) : (
               <div style={{ borderTop: `1px solid ${theme.line}`, paddingTop: 18 }}>
@@ -107,24 +102,6 @@ export function HomeScreen({ theme, lang, status, clockInTime, breakStartTime, b
           </div>
         </div>
 
-        {/* Site info card */}
-        <div style={{ padding: '16px 20px 0' }}>
-          <div style={{ background: theme.card, borderRadius: 20, padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 14, border: `1px solid ${theme.line}` }}>
-            <div style={{ width: 40, height: 40, borderRadius: 12, background: theme.accentSoft, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Icons.Pin size={20} c={theme.accent} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontFamily: FONT_TH, fontSize: 11, color: theme.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>{COPY.site[lang]}</div>
-              <div style={{ fontFamily: FONT_TH, fontSize: 15, fontWeight: 700, color: theme.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {site.name[lang]}
-              </div>
-            </div>
-            <div style={{ fontFamily: FONT_TH, fontSize: 12, color: theme.accent, fontWeight: 700, background: theme.accentSoft, padding: '5px 10px', borderRadius: 999 }}>
-              {COPY.inArea[lang]}
-            </div>
-          </div>
-        </div>
-
         {/* Action buttons */}
         <div style={{ padding: '20px 20px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {status === 'out' && (
@@ -137,48 +114,16 @@ export function HomeScreen({ theme, lang, status, clockInTime, breakStartTime, b
             />
           )}
           {status === 'in' && (
-            <>
-              <BigButton
-                theme={theme}
-                label={COPY.clockOut[lang]}
-                sublabel={lang === 'en' ? 'End your shift' : 'จบกะงาน'}
-                onClick={onClockOut}
-                icon={iconBox(<Icons.Clock size={22} c={theme.primaryInk} />)}
-              />
-              <GhostButton theme={theme} onClick={onBreak}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                  <Icons.Coffee size={20} c={theme.ink} />
-                  {COPY.startBreak[lang]}
-                </div>
-              </GhostButton>
-            </>
-          )}
-          {status === 'break' && (
-            <>
-              <BigButton
-                theme={theme}
-                label={COPY.endBreak[lang]}
-                sublabel={lang === 'en' ? 'Resume your shift' : 'กลับมาทำงานต่อ'}
-                onClick={onBreak}
-                color={theme.accent}
-                inkColor="#fff"
-                icon={iconBox(<Icons.Play size={20} c="#fff" />)}
-              />
-              <GhostButton theme={theme} onClick={onClockOut}>
-                {COPY.clockOut[lang]}
-              </GhostButton>
-            </>
+            <BigButton
+              theme={theme}
+              label={COPY.clockOut[lang]}
+              sublabel={lang === 'en' ? 'End your shift' : 'จบกะงาน'}
+              onClick={onClockOut}
+              icon={iconBox(<Icons.Clock size={22} c={theme.primaryInk} />)}
+            />
           )}
         </div>
 
-        {/* Quick actions */}
-        <div style={{ padding: '4px 20px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <QuickAction theme={theme} icon={<Icons.Calendar size={18} c={theme.ink} />} label={lang === 'en' ? 'History' : 'ประวัติ'} sub={lang === 'en' ? 'This week' : 'สัปดาห์นี้'} onClick={() => onTab('history')} />
-          <QuickAction theme={theme} icon={<Icons.Wallet size={18} c={theme.ink} />} label={lang === 'en' ? 'Payslip' : 'สลิปเงินเดือน'} sub={lang === 'en' ? 'Apr 2026' : 'เม.ย. 2569'} onClick={() => onTab('profile')} />
-        </div>
-      </div>
-
-      <TabBar tab={tab} onTab={onTab} theme={theme} lang={lang} />
     </div>
   );
 }
@@ -195,20 +140,3 @@ function Stat({ theme, label, value, unit, highlight }: { theme: Theme; label: s
   );
 }
 
-function QuickAction({ theme, icon, label, sub, onClick }: { theme: Theme; icon: React.ReactNode; label: string; sub: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick} style={{
-      background: theme.card, border: `1px solid ${theme.line}`, borderRadius: 18,
-      padding: 16, textAlign: 'left', cursor: 'pointer',
-      display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-start',
-    } as CSSProperties}>
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: theme.surface, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {icon}
-      </div>
-      <div>
-        <div style={{ fontFamily: FONT_TH, fontSize: 15, fontWeight: 700, color: theme.ink }}>{label}</div>
-        <div style={{ fontFamily: FONT_TH, fontSize: 12, color: theme.inkSoft, marginTop: 2 }}>{sub}</div>
-      </div>
-    </button>
-  );
-}

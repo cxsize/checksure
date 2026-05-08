@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import liff from '@line/liff';
 import type { Theme, Lang } from '../tokens';
 import { COPY, FONT_TH, FONT_EN } from '../tokens';
+import loginIllustration from '../assets/login-illustration.jpg';
 import { signInWithLineToken, auth } from '../services/firebase';
 import { signInAnonymously } from 'firebase/auth';
 import { Icons } from '../components/ui/Icons';
@@ -42,8 +43,11 @@ export function LoginScreen({ theme, lang, onLogin }: LoginScreenProps) {
       const accessToken = liff.getAccessToken();
       if (!accessToken) throw new Error('No LINE access token');
 
-      const apiBase = import.meta.env.VITE_API_BASE_URL as string;
-      const res = await fetch(`${apiBase}/lineAuth`, {
+      const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || '';
+      const lineAuthUrl = import.meta.env.DEV
+        ? `http://localhost:5001/${projectId}/asia-southeast1/lineAuth`
+        : (import.meta.env.VITE_LINE_AUTH_URL || `https://lineauth-6ocfcfmu4a-as.a.run.app`);
+      const res = await fetch(lineAuthUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken }),
@@ -60,13 +64,49 @@ export function LoginScreen({ theme, lang, onLogin }: LoginScreenProps) {
     }
   }
 
+  async function handleDevLogin() {
+    setLoading(true);
+    setError(null);
+    try {
+      // Dev mode: call lineAuth with a fake token — the emulator accepts anything
+      const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || '';
+      const lineAuthUrl = `http://localhost:5001/${projectId}/asia-southeast1/lineAuth`;
+      const res = await fetch(lineAuthUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: 'dev-test-token' }),
+      });
+      const body = (await res.json()) as { customToken?: string; error?: string };
+      if (!res.ok) throw new Error(body.error ?? 'Auth failed');
+      await signInWithLineToken(body.customToken!);
+      onLogin();
+    } catch (err) {
+      // Fallback to anonymous if lineAuth isn't running (dev only)
+      console.warn('[Dev] lineAuth failed, falling back to anonymous:', err);
+      if (import.meta.env.DEV) {
+        signInAnonymously(auth)
+          .then(() => onLogin())
+          .catch((e: Error) => { setError(e.message); setLoading(false); });
+      } else {
+        setError(lang === 'en' ? 'Login failed. Please try again.' : 'เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่');
+        setLoading(false);
+      }
+    }
+  }
+
   function handlePress() {
     if (!liffReady) {
-      // Dev mode: sign in anonymously against the local Auth emulator
-      setLoading(true);
-      signInAnonymously(auth)
-        .then(() => onLogin())
-        .catch((err: Error) => { setError(err.message); setLoading(false); });
+      if (import.meta.env.DEV) {
+        handleDevLogin();
+      } else {
+        // Production: redirect to LIFF URL so it opens in LINE
+        const liffId = import.meta.env.VITE_LIFF_ID;
+        if (liffId) {
+          window.location.href = `https://liff.line.me/${liffId}`;
+        } else {
+          setError(lang === 'en' ? 'Please open this app in LINE.' : 'กรุณาเปิดแอปนี้ผ่าน LINE');
+        }
+      }
       return;
     }
     if (liff.isLoggedIn()) {
@@ -107,16 +147,15 @@ export function LoginScreen({ theme, lang, onLogin }: LoginScreenProps) {
         </div>
       </div>
 
-      {/* Illustration placeholder */}
+      {/* Illustration */}
       <div style={{
-        height: 120, borderRadius: 20, marginBottom: 24,
-        background: `repeating-linear-gradient(135deg, ${theme.surface}, ${theme.surface} 8px, ${theme.line} 8px, ${theme.line} 9px)`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        border: `1px dashed ${theme.line}`,
+        height: 140, borderRadius: 20, marginBottom: 24, overflow: 'hidden',
       }}>
-        <div style={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 11, color: theme.inkMute, background: theme.bg, padding: '4px 10px', borderRadius: 6 }}>
-          [illustration · friendly factory worker]
-        </div>
+        <img
+          src={loginIllustration}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%' }}
+        />
       </div>
 
       {error && (

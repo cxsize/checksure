@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import type { Theme, Lang, SiteData } from '../tokens';
-import { COPY, FONT_TH, FONT_NUM, MOCK_SITES, fmtTime, fmtDateTh } from '../tokens';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import type { Theme, Lang } from '../tokens';
+import { COPY, FONT_TH, FONT_NUM, fmtTime, fmtDateTh } from '../tokens';
 import { useNow } from '../hooks/useNow';
 import { useGeolocation, evaluateSites } from '../hooks/useGeolocation';
+import { useSites } from '../hooks/useSites';
 import { BigButton } from '../components/ui/BigButton';
 import { Icons } from '../components/ui/Icons';
 
@@ -10,42 +11,53 @@ interface ClockInScreenProps {
   theme: Theme;
   lang: Lang;
   mode: 'in' | 'out';
+  assignedSiteIds?: string[];
   onConfirm: (siteId: string) => void;
   onCancel: () => void;
 }
 
-export function ClockInScreen({ theme, lang, mode, onConfirm, onCancel }: ClockInScreenProps) {
+export function ClockInScreen({ theme, lang, mode, assignedSiteIds, onConfirm, onCancel }: ClockInScreenProps) {
   const now = useNow(60000);
   const geo = useGeolocation();
-  const [sites, setSites] = useState<SiteData[]>(MOCK_SITES);
-  const [selectedId, setSelectedId] = useState(MOCK_SITES[0].id);
+  const { sites: rawSites, loading: sitesLoading } = useSites(assignedSiteIds);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [phase, setPhase] = useState<'locating' | 'ready'>('locating');
+  const autoSelectedRef = useRef(false);
+
+  // Derive evaluated sites from geo + rawSites (no setState needed)
+  const sites = useMemo(() => {
+    if (geo.lat !== null && geo.lng !== null && rawSites.length > 0) {
+      return evaluateSites(geo.lat, geo.lng, rawSites);
+    }
+    return rawSites;
+  }, [geo.lat, geo.lng, rawSites]);
+
+  // Auto-select nearest site once when sites are first available
+  if (sites.length > 0 && !autoSelectedRef.current) {
+    autoSelectedRef.current = true;
+    const nearest = sites.reduce((a, b) => (a.distance < b.distance ? a : b));
+    setSelectedId(nearest.id);
+  }
 
   useEffect(() => {
     geo.locate();
-    // Fallback: show ready state after 2s when GPS succeeds or times out
     const t = setTimeout(() => setPhase('ready'), 2000);
     return () => clearTimeout(t);
-  }, []);
+  }, [geo]);
 
-  // If geo error occurs, still transition to ready so user sees the outside-area warning
-  useEffect(() => {
-    if (geo.error) setPhase('ready');
-  }, [geo.error]);
+  // Derive phase: ready once geo resolves/errors or after timeout
+  const geoReady = geo.error || (geo.lat !== null && geo.lng !== null);
+  const derivedPhase = geoReady ? 'ready' : phase;
 
-  useEffect(() => {
-    if (geo.lat !== null && geo.lng !== null) {
-      setSites(evaluateSites(geo.lat, geo.lng, MOCK_SITES));
-      setPhase('ready');
-    }
-  }, [geo.lat, geo.lng]);
-
-  const site = sites.find((s) => s.id === selectedId) ?? sites[0];
-  const canConfirm = phase === 'ready' && site.inside;
+  const site = sites.find((s) => s.id === selectedId) ?? sites[0] ?? null;
+  const devBypass = import.meta.env.DEV;
+  const canConfirm = derivedPhase === 'ready' && !sitesLoading && site !== null && (site.inside || devBypass);
 
   const confirmLabel = mode === 'in' ? COPY.confirmIn[lang] : COPY.confirmOut[lang];
   const sublabel = canConfirm
-    ? (lang === 'en' ? `Tap to record ${fmtTime(now)}` : `แตะเพื่อบันทึก ${fmtTime(now)}`)
+    ? (devBypass && !site?.inside
+        ? `[DEV] Geofence bypassed · ${fmtTime(now)}`
+        : (lang === 'en' ? `Tap to record ${fmtTime(now)}` : `แตะเพื่อบันทึก ${fmtTime(now)}`))
     : (lang === 'en' ? 'Move inside the geofence first' : 'เข้าไปในพื้นที่ก่อน');
 
   return (
@@ -66,7 +78,7 @@ export function ClockInScreen({ theme, lang, mode, onConfirm, onCancel }: ClockI
 
       {/* Map mock */}
       <div style={{ margin: '12px 20px 16px', height: 240, borderRadius: 24, overflow: 'hidden', position: 'relative', background: theme.surface, border: `1px solid ${theme.line}` }}>
-        <MapMock theme={theme} inside={site.inside} />
+        <MapMock theme={theme} inside={site?.inside ?? false} />
 
         {/* Status badge */}
         <div style={{
@@ -74,7 +86,7 @@ export function ClockInScreen({ theme, lang, mode, onConfirm, onCancel }: ClockI
           background: theme.card, borderRadius: 14, padding: '10px 14px',
           boxShadow: '0 4px 14px -4px rgba(0,0,0,0.12)',
         }}>
-          {phase === 'locating' ? (
+          {derivedPhase === 'locating' ? (
             <>
               <div style={{
                 width: 18, height: 18, border: `2.5px solid ${theme.line}`, borderTopColor: theme.primary,
@@ -84,7 +96,7 @@ export function ClockInScreen({ theme, lang, mode, onConfirm, onCancel }: ClockI
                 {COPY.locating[lang]}
               </div>
             </>
-          ) : (
+          ) : site ? (
             <>
               <div style={{ width: 18, height: 18, borderRadius: 9, background: site.inside ? theme.accent : theme.warn, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 {site.inside ? <Icons.Check size={12} c="#fff" sw={3} /> : <Icons.X size={12} c="#fff" sw={3} />}
@@ -98,7 +110,7 @@ export function ClockInScreen({ theme, lang, mode, onConfirm, onCancel }: ClockI
                 {site.distance < 1000 ? `${site.distance} ${COPY.meters[lang]}` : `${(site.distance / 1000).toFixed(1)} km`}
               </div>
             </>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -156,7 +168,7 @@ export function ClockInScreen({ theme, lang, mode, onConfirm, onCancel }: ClockI
       )}
 
       {/* Outside warning */}
-      {phase === 'ready' && !geo.error && !site.inside && (
+      {derivedPhase === 'ready' && !geo.error && site && !site.inside && (
         <div style={{ margin: '12px 20px 0', background: theme.warnSoft, color: theme.warn, borderRadius: 14, padding: '12px 14px', fontFamily: FONT_TH, fontSize: 13, lineHeight: 1.5, display: 'flex', gap: 10 }}>
           <Icons.Pin size={18} c={theme.warn} />
           <div>
@@ -174,7 +186,7 @@ export function ClockInScreen({ theme, lang, mode, onConfirm, onCancel }: ClockI
           theme={theme}
           label={confirmLabel}
           sublabel={sublabel}
-          onClick={() => onConfirm(selectedId)}
+          onClick={() => selectedId && onConfirm(selectedId)}
           color={mode === 'out' ? theme.accent : theme.primary}
           inkColor="#fff"
           disabled={!canConfirm}

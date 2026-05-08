@@ -67,12 +67,6 @@ export const Icons = {
       <path d="M7 2v3M11 2v3" />
     </svg>
   ),
-  Wallet: ({ size = 24, c = 'currentColor', sw = 2 }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="6" width="18" height="14" rx="2" />
-      <path d="M3 10h18M16 15h2" />
-    </svg>
-  ),
   Globe: ({ size = 24, c = 'currentColor', sw = 2 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="9" />
@@ -91,12 +85,6 @@ export const Icons = {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
       <path d="M6 6l12 12M18 6L6 18" />
     </svg>
-  ),
-  Play: ({ size = 24, c = 'currentColor' }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={c}><path d="M7 5v14l11-7z" /></svg>
-  ),
-  Pause: ({ size = 24, c = 'currentColor' }: IconProps) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill={c}><rect x="6" y="5" width="4" height="14" rx="1" /><rect x="14" y="5" width="4" height="14" rx="1" /></svg>
   ),
   Refresh: ({ size = 24, c = 'currentColor', sw = 2 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
